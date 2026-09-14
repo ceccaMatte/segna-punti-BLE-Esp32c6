@@ -37,6 +37,7 @@ set(PADEL_DEVICE_SOURCES
     "commissioning_manager.c"
     "commissioning_ui.c"
     "ble_score_service.c"
+    "gpio_scan.c"
 )
 
 # Serve il driver del display (che a sua volta vuole SPI e GPIO), quello della
@@ -64,6 +65,7 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     BTN_DEBOUNCE_MS=${CONFIG_PADEL_BUTTON_DEBOUNCE_MS}u
     BTN_MULTI_CLICK_MS=${CONFIG_PADEL_MULTI_CLICK_MS}u
     BTN_LONG_PRESS_MS=${CONFIG_PADEL_LONG_PRESS_MS}u
+    BTN_VERY_LONG_PRESS_MS=${CONFIG_PADEL_BUTTON_COMMISSION_MS}u
     CONTROLLER_FINISHED_SCREEN_MS=${CONFIG_PADEL_FINAL_SCREEN_MS}u
     MATCH_SETS_TO_WIN=${CONFIG_PADEL_SETS_TO_WIN}
     LED_BRIGHTNESS_PERMILLE=${CONFIG_PADEL_LED_BRIGHTNESS}u

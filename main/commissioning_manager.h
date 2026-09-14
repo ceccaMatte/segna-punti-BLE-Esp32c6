@@ -55,6 +55,16 @@ void commissioning_manager_init(void);
  */
 void commissioning_manager_update(bool gpio_low, uint32_t dt_ms);
 
+/**
+ * @brief Apre la finestra di commissioning su richiesta di chi chiama.
+ *
+ * Fa esattamente quello che fa il piedino tenuto verso massa: cancella
+ * l'associazione salvata e apre la finestra per associarne una nuova. Serve a
+ * chi non ha un pulsante da collegare al piedino: lo stesso gesto si fa con il
+ * pulsante di gioco, tenendolo premuto piu' a lungo dell'azzeramento.
+ */
+void commissioning_manager_request(void);
+
 /** Lo stato dell'associazione. */
 const commissioning_state_t *commissioning_manager_state(void);
 

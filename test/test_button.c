@@ -48,6 +48,37 @@ static void one_click(button_t *b, evt_log_t *log)
 /** Attesa sufficiente a far scadere la finestra multi-click. */
 #define WINDOW_DRAIN (BTN_MULTI_CLICK_MS + 100u)
 
+/** Quanti eventi al massimo si annotano in una sequenza. */
+#define SEQ_CAP 8
+
+/**
+ * Registro ordinato degli eventi: serve dove l'ordine conta.
+ *
+ * Un contatore direbbe solo quanti ne sono arrivati; qui interessa che il
+ * secondo gesto venga dopo il primo, non prima.
+ */
+typedef struct {
+    btn_event_t events[SEQ_CAP];
+    int         count;
+} seq_log_t;
+
+static void seq_reset(seq_log_t *log)
+{
+    log->count = 0;
+}
+
+/** Fa avanzare la macchina a stati e annota gli eventi, nell'ordine in cui escono. */
+static void run_seq(button_t *b, bool pressed, uint32_t ms, seq_log_t *log)
+{
+    for (uint32_t t = 0; t < ms && log->count < SEQ_CAP; t += TICK_MS) {
+        const btn_event_t e = button_update(b, pressed, TICK_MS);
+
+        if (e != BTN_EVT_NONE) {
+            log->events[log->count++] = e;
+        }
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 
 static void test_singolo(void)
@@ -210,6 +241,104 @@ static void test_lunga_scarta_la_sequenza(void)
     test_end("la pressione lunga scarta la sequenza di click pendente");
 }
 
+static void test_pressione_prolungata(void)
+{
+    test_begin("pressione oltre la soglia lunga -> LONG e poi VERY_LONG");
+
+    button_t  b;
+    seq_log_t log;
+
+    button_init(&b);
+    seq_reset(&log);
+
+    /*
+     * Un dito solo, tenuto giu' oltre il commissioning. I due gesti partono
+     * dallo stesso conto: prima la partita si azzera, poi la finestra si apre.
+     * L'ordine conta, ed e' questo.
+     */
+    run_seq(&b, true, BTN_VERY_LONG_PRESS_MS + 100u, &log);
+
+    CHECK_EQ(log.count, 2);
+    CHECK_EQ(log.events[0], BTN_EVT_LONG);
+    CHECK_EQ(log.events[1], BTN_EVT_VERY_LONG);
+
+    /* al rilascio non deve uscire altro: i due gesti sono gia' finiti */
+    run_seq(&b, false, WINDOW_DRAIN, &log);
+    CHECK_EQ(log.count, 2);
+
+    test_end("pressione oltre la soglia lunga -> LONG e poi VERY_LONG");
+}
+
+static void test_fra_le_due_soglie(void)
+{
+    test_begin("pressione fra le due soglie -> solo LONG");
+
+    button_t  b;
+    seq_log_t log;
+
+    button_init(&b);
+    seq_reset(&log);
+
+    /* chi si ferma appena prima della soglia lunga non deve ritrovarsi la
+       schermata di commissioning */
+    run_seq(&b, true, BTN_VERY_LONG_PRESS_MS - 100u, &log);
+
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.events[0], BTN_EVT_LONG);
+
+    test_end("pressione fra le due soglie -> solo LONG");
+}
+
+static void test_prolungata_una_volta_sola(void)
+{
+    test_begin("pressione di mezzo minuto -> il commissioning esce una volta sola");
+
+    button_t  b;
+    seq_log_t log;
+
+    button_init(&b);
+    seq_reset(&log);
+
+    /*
+     * Un piedino tenuto a massa per minuti non fa riaprire la finestra a ogni
+     * secondo, e allo stesso modo un pulsante tenuto premuto non deve
+     * ripetere il gesto: due eventi, e basta, per quanto si insista.
+     */
+    run_seq(&b, true, 5u * BTN_VERY_LONG_PRESS_MS, &log);
+
+    CHECK_EQ(log.count, 2);
+    CHECK_EQ(log.events[1], BTN_EVT_VERY_LONG);
+
+    run_seq(&b, false, WINDOW_DRAIN, &log);
+    CHECK_EQ(log.count, 2);
+
+    test_end("pressione di mezzo minuto -> il commissioning esce una volta sola");
+}
+
+static void test_dopo_il_commissioning(void)
+{
+    test_begin("dopo il commissioning si riparte con i gesti normali");
+
+    button_t  b;
+    seq_log_t log;
+
+    button_init(&b);
+    seq_reset(&log);
+
+    run_seq(&b, true, BTN_VERY_LONG_PRESS_MS + 100u, &log);
+    run_seq(&b, false, WINDOW_DRAIN, &log);
+    seq_reset(&log);
+
+    /* un click singolo, come se la partita fosse appena cominciata */
+    run_seq(&b, true, 100u, &log);
+    run_seq(&b, false, WINDOW_DRAIN, &log);
+
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.events[0], BTN_EVT_SINGLE);
+
+    test_end("dopo il commissioning si riparte con i gesti normali");
+}
+
 static void test_rimbalzi(void)
 {
     test_begin("rimbalzi sui contatti non generano click spuri");
@@ -249,6 +378,10 @@ void test_button_all(void)
     test_click_separati();
     test_pressione_lunga();
     test_lunga_scarta_la_sequenza();
+    test_pressione_prolungata();
+    test_fra_le_due_soglie();
+    test_prolungata_una_volta_sola();
+    test_dopo_il_commissioning();
     test_rimbalzi();
 
     printf("\n");

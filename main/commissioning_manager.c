@@ -107,6 +107,23 @@ static void refresh_outputs(void)
 }
 
 /* -------------------------------------------------------------------------- */
+/* Aprire la finestra                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cancella l'associazione e apre la finestra.
+ *
+ * La cancellazione riguarda solo il commissioning — nella memoria di questa
+ * scheda non c'e' nient'altro che il token — ed e' voluta: chi apre la finestra
+ * sta revocando l'associazione che c'era.
+ */
+static void open_window(void)
+{
+    commissioning_state_open(&s_state);
+    (void)nvs_store_erase_token();
+}
+
+/* -------------------------------------------------------------------------- */
 /* Comandi                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -200,16 +217,11 @@ void commissioning_manager_update(bool gpio_low, uint32_t dt_ms)
 {
     bool something_changed = false;
 
-    /*
-     * Il piedino tenuto basso: si cancella l'associazione precedente e si apre
-     * la finestra. La cancellazione riguarda solo il commissioning — nella
-     * memoria di questa scheda non c'e' altro che il token — ed e' voluta: chi
-     * apre la finestra sta revocando l'associazione che c'era.
-     */
+    /* Il piedino tenuto basso: si cancella l'associazione precedente e si apre
+       la finestra, come farebbe il pulsante di gioco tenuto premuto a lungo. */
     if (hold_gesture_update(&s_gesture, gpio_low, dt_ms, COMMISSIONING_HOLD_MS)) {
         ESP_LOGW(TAG, "commissioning richiesto: associazione cancellata, finestra aperta");
-        commissioning_state_open(&s_state);
-        (void)nvs_store_erase_token();
+        open_window();
         something_changed = true;
     }
 
@@ -248,6 +260,17 @@ void commissioning_manager_update(bool gpio_low, uint32_t dt_ms)
         refresh_outputs();
         (void)ble_gatt_notify_status();
     }
+}
+
+void commissioning_manager_request(void)
+{
+    ESP_LOGW(TAG, "commissioning richiesto: associazione cancellata, finestra aperta");
+    open_window();
+
+    /* Fuori dal giro di commissioning_manager_update non c'e' nessuno che
+       rinfreschi radio e schermo: si fa qui, che e' l'unica cosa da fare. */
+    refresh_outputs();
+    (void)ble_gatt_notify_status();
 }
 
 const commissioning_state_t *commissioning_manager_state(void)

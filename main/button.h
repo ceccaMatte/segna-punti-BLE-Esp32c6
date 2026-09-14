@@ -18,8 +18,13 @@
  *   - solo allo scadere della finestra la sequenza viene interpretata.
  *   - la pressione lunga ha priorita': appena raggiunge BTN_LONG_PRESS_MS
  *     emette LONG, azzera il conteggio dei click (la sequenza pendente viene
- *     scartata) e passa a BTN_RELEASE_WAIT, che non genera altri eventi fino
- *     al rilascio.
+ *     scartata) e passa a BTN_RELEASE_WAIT.
+ *   - la pressione non finisce li'. Se il dito resta giu' fino a
+ *     BTN_VERY_LONG_PRESS_MS, da BTN_RELEASE_WAIT esce un secondo evento,
+ *     VERY_LONG: e' il gesto che apre il commissioning senza doverci attaccare
+ *     un filo o un pulsante esterno. Il conteggio si ferma sulla soglia,
+ *     quindi l'evento esce una volta sola anche se il pulsante resta premuto
+ *     per minuti.
  *   - quattro o piu' click non producono nulla: la sequenza viene scartata.
  *     Il contatore NON viene saturato a 3, altrimenti quattro pressioni
  *     accidentali eseguirebbero un UNDO.
@@ -34,6 +39,7 @@
  * | PRESS         | level == rilasciato               | window = 0        | CLICK_WAIT   |
  * | CLICK_WAIT    | level == premuto                  | clicks++          | PRESS        |
  * | CLICK_WAIT    | window >= MULTI_CLICK_MS          | dispatch(clicks)  | IDLE         |
+ * | RELEASE_WAIT  | hold >= VERY_LONG_PRESS_MS        | VERY_LONG         | RELEASE_WAIT |
  * | RELEASE_WAIT  | level == rilasciato               | nessuno           | IDLE         |
  *
  * Nota sul debounce: il rilascio viene riconosciuto fino a BTN_DEBOUNCE_MS dopo
@@ -58,6 +64,22 @@
 #define BTN_LONG_PRESS_MS 4000u
 #endif
 
+/**
+ * Durata oltre la quale la pressione apre il commissioning.
+ *
+ * E' la seconda soglia della stessa pressione: prima si azzera la partita,
+ * poi, continuando a tenere premuto, si apre la finestra per una nuova
+ * associazione. Dev'essere maggiore di BTN_LONG_PRESS_MS, altrimenti i due
+ * gesti non si distinguerebbero.
+ */
+#ifndef BTN_VERY_LONG_PRESS_MS
+#define BTN_VERY_LONG_PRESS_MS 6000u
+#endif
+
+#if BTN_VERY_LONG_PRESS_MS <= BTN_LONG_PRESS_MS
+#error "BTN_VERY_LONG_PRESS_MS deve essere maggiore di BTN_LONG_PRESS_MS"
+#endif
+
 /** Finestra entro cui click successivi vengono accorpati nella stessa sequenza. */
 #ifndef BTN_MULTI_CLICK_MS
 #define BTN_MULTI_CLICK_MS 400u
@@ -66,10 +88,11 @@
 /** Evento prodotto dalla macchina a stati. */
 typedef enum {
     BTN_EVT_NONE = 0,
-    BTN_EVT_SINGLE, /**< 1 click  -> punto a NOI  */
-    BTN_EVT_DOUBLE, /**< 2 click  -> punto a LORO */
-    BTN_EVT_TRIPLE, /**< 3 click  -> UNDO         */
-    BTN_EVT_LONG    /**< 4 s      -> RESET        */
+    BTN_EVT_SINGLE,    /**< 1 click              -> punto a NOI     */
+    BTN_EVT_DOUBLE,    /**< 2 click              -> punto a LORO    */
+    BTN_EVT_TRIPLE,    /**< 3 click              -> UNDO            */
+    BTN_EVT_LONG,      /**< BTN_LONG_PRESS_MS      -> RESET         */
+    BTN_EVT_VERY_LONG  /**< BTN_VERY_LONG_PRESS_MS -> commissioning */
 } btn_event_t;
 
 /** Stato interno della macchina. */

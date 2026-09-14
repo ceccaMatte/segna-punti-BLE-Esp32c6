@@ -9,6 +9,7 @@
  *   3 click         annulla l'ultima azione
  *   4 click o piu'  nessuna azione
  *   pressione 4 s   azzera la partita e ricomincia
+ *   pressione 6 s   apre la finestra di commissioning
  *
  * Il programma fa due cose soltanto: far avanzare la partita e tenere lo
  * schermo allineato a essa. Non prende nessuna decisione sul padel: le regole
@@ -26,7 +27,9 @@
  * sul telefono o sul computer. La scheda resta lei la padrona del punteggio:
  * manda lo stato, non lo riceve, e chi non si e' fatto riconoscere non riceve
  * niente. Tenendo basso il piedino di commissioning per tre secondi si cancella
- * l'associazione e si apre la finestra per associarne una nuova.
+ * l'associazione e si apre la finestra per associarne una nuova. Lo stesso
+ * gesto si fa senza fili con il pulsante di gioco: basta non fermarsi
+ * all'azzeramento e tenere premuto fino alla soglia piu' lunga.
  *
  * Il ciclo principale gira ogni 5 millisecondi. Non e' una necessita' del
  * gioco: serve al riconoscimento dei click, che deve distinguere uno, due e tre
@@ -57,6 +60,7 @@
 #include "commissioning_ui.h"
 #include "controller.h"
 #include "display.h"
+#include "gpio_scan.h"
 #include "led_anim.h"
 #include "match.h"
 #include "rgb_led.h"
@@ -142,6 +146,19 @@ static void commissioning_gpio_init(void)
     };
 
     ESP_ERROR_CHECK(gpio_config(&io_config));
+
+    /*
+     * Come si legge il piedino appena configurato.
+     *
+     * Con la resistenza di salita accesa un piedino libero si legge alto: se
+     * all'avvio si legge gia' basso, vuol dire che qualcosa lo tiene a massa.
+     * E' la prima cosa da guardare quando il commissioning non si apre.
+     */
+    ESP_LOGI(TAG, "commissioning: GPIO%d letto %s all'avvio",
+             CONFIG_PADEL_COMMISSIONING_GPIO,
+             (gpio_get_level((gpio_num_t)CONFIG_PADEL_COMMISSIONING_GPIO) == 0)
+                 ? "BASSO (qualcosa lo tiene a massa)"
+                 : "alto");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -174,9 +191,10 @@ static const char *event_name(btn_event_t event)
     switch (event) {
     case BTN_EVT_SINGLE: return "1 click -> NOI";
     case BTN_EVT_DOUBLE: return "2 click -> LORO";
-    case BTN_EVT_TRIPLE: return "3 click -> annulla";
-    case BTN_EVT_LONG:   return "pressione lunga -> azzera";
-    default:             return "nessuno";
+    case BTN_EVT_TRIPLE:    return "3 click -> annulla";
+    case BTN_EVT_LONG:      return "pressione lunga -> azzera";
+    case BTN_EVT_VERY_LONG: return "pressione prolungata -> commissioning";
+    default:                return "nessuno";
     }
 }
 #endif
@@ -203,6 +221,8 @@ static void print_banner(void)
     ESP_LOGI(TAG, "  gesti      1 click NOI | 2 click LORO | 3 click annulla");
     ESP_LOGI(TAG, "             4 click niente | %" PRIu32 " ms azzera",
              (uint32_t)BTN_LONG_PRESS_MS);
+    ESP_LOGI(TAG, "             %" PRIu32 " ms apre il commissioning",
+             (uint32_t)BTN_VERY_LONG_PRESS_MS);
     ESP_LOGI(TAG, "  finestra   %" PRIu32 " ms per i click multipli",
              (uint32_t)BTN_MULTI_CLICK_MS);
     ESP_LOGI(TAG, "  partita    al meglio di %d set, serve per primo %s",
@@ -294,6 +314,17 @@ void app_main(void)
      * meglio di una scheda che si riavvia.
      */
     commissioning_gpio_init();
+
+#if CONFIG_PADEL_GPIO_SCAN
+    /*
+     * Diagnostica: guarda tutti i piedini che la scheda porta fuori e li
+     * racconta sul monitor seriale. Serve a distinguere "il piedino non si
+     * legge" da "il filo non arriva": si mette a massa un piedino e si guarda
+     * se il log se ne accorge.
+     */
+    gpio_scan_init();
+#endif
+
     commissioning_manager_init();
     ble_score_service_init();
     commissioning_ui_init();
@@ -313,6 +344,16 @@ void app_main(void)
 
     /* Vero finche' a video c'e' la schermata di commissioning. */
     bool commissioning_screen = false;
+
+    /*
+     * Ultimo livello visto sul piedino di commissioning.
+     *
+     * Serve a stampare una riga quando cambia, e solo allora: e' il modo piu'
+     * diretto per capire se il filo fa contatto, senza doverlo dedurre dal
+     * fatto che il gesto sia scattato o meno.
+     */
+    bool commissioning_low_seen =
+        (gpio_get_level((gpio_num_t)CONFIG_PADEL_COMMISSIONING_GPIO) == 0);
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
@@ -341,7 +382,14 @@ void app_main(void)
                               BUTTON_PRESSED_LEVEL);
         const btn_event_t event = button_update(&button, pressed, dt_ms);
 
-        if (event != BTN_EVT_NONE) {
+        /*
+         * La pressione piu' lunga non e' un gesto di gioco: non passa dal
+         * controller, apre la finestra di commissioning come farebbe il piedino
+         * tenuto verso massa. Il controller non sa nemmeno che esista.
+         */
+        if (event == BTN_EVT_VERY_LONG) {
+            commissioning_manager_request();
+        } else if (event != BTN_EVT_NONE) {
             controller_handle_event(event);
 
 #if CONFIG_PADEL_DEBUG_INVARIANTS
@@ -395,7 +443,19 @@ void app_main(void)
          */
         const bool commissioning_low =
             (gpio_get_level((gpio_num_t)CONFIG_PADEL_COMMISSIONING_GPIO) == 0);
+
+        if (commissioning_low != commissioning_low_seen) {
+            ESP_LOGI(TAG, "commissioning: GPIO%d %s",
+                     CONFIG_PADEL_COMMISSIONING_GPIO,
+                     commissioning_low ? "verso massa" : "rilasciato");
+            commissioning_low_seen = commissioning_low;
+        }
+
         commissioning_manager_update(commissioning_low, dt_ms);
+
+#if CONFIG_PADEL_GPIO_SCAN
+        gpio_scan_tick(now_ms);
+#endif
 
         /* Lo stato della partita si pubblica da qui, ed e' l'unico posto in cui
            il punteggio incontra la radio. */

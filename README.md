@@ -12,6 +12,7 @@ Il pulsante è quello di **BOOT**, l'unico presente sulla scheda. Fa tutto lui:
 | 3 click | **annulla** l'ultima azione |
 | 4 click o più | nessuna azione |
 | pressione di 4 secondi | **azzera** la partita e ricomincia |
+| pressione di 6 secondi | **azzera** e apre la finestra di **commissioning** |
 
 Un click solo non viene eseguito al rilascio del pulsante, ma allo scadere di
 una finestra di 400 ms: è quello che permette di distinguere uno, due e tre
@@ -32,8 +33,9 @@ una festa. La luminosità si regola da menuconfig, e a zero il LED resta spento.
 Una **pagina web** può collegarsi via Bluetooth e mostrare lo stesso punteggio
 sul computer, senza server e senza account. La scheda resta lei la padrona:
 manda lo stato, non lo riceve, e chi non si è fatto riconoscere non vede nulla.
-Tenendo basso il piedino di commissioning per tre secondi si revoca
-l'associazione e si apre la finestra per associarne una nuova.
+Si revoca l'associazione, e si apre la finestra per associarne una nuova, in due
+modi che fanno la stessa cosa: tenendo basso il piedino di commissioning per tre
+secondi, oppure tenendo premuto il pulsante di BOOT oltre l'azzeramento.
 
 ---
 
@@ -229,6 +231,7 @@ Tutto si configura da `idf.py menuconfig` → **Segnapunti padel**.
 | Rimbalzo ignorato | 25 ms | quanto deve restare stabile il piedino prima di essere creduto |
 | Finestra multi-click | 400 ms | quanto si aspetta per capire se arriva un altro click |
 | Pressione lunga | 4000 ms | durata per l'azzeramento |
+| Pressione prolungata | 6000 ms | tenuta che apre il commissioning, senza fili |
 | Durata schermata finale | 4000 ms | quanto resta a video chi ha vinto |
 | Chi serve per primo | NOI | nel padel si sorteggia, quindi si sceglie qui |
 | Set per vincere | 3 | al meglio dei 5 |
@@ -246,7 +249,9 @@ web, e l'associazione si puo' revocare in qualsiasi momento.
 
 **Prima volta**
 
-1. Porta il piedino **GPIO0 verso massa** e tienilo li' per **tre secondi**. Sul
+1. Porta il piedino **GPIO0 verso massa** e tienilo li' per **tre secondi**,
+oppure tieni premuto il pulsante di **BOOT** fino a **sei secondi**: la partita
+si azzera e si apre la finestra di commissioning. Sul
 display compare la schermata `COMMISSIONING` con il nome della scheda, lo stato
 della radio e il conto alla rovescia. La finestra resta aperta **sessanta
 secondi**.
@@ -264,13 +269,15 @@ il browser non lo permette, c'è il pulsante **RICONNETTI**.
 
 **Per revocare l'associazione**
 
-Tieni di nuovo GPIO0 verso massa per tre secondi: la scheda cancella il token
-e riapre la finestra. D'ora in poi la vecchia pagina riceve
+Tieni di nuovo GPIO0 verso massa per tre secondi, oppure il pulsante di BOOT
+fino a sei: la scheda cancella il token e riapre la finestra. D'ora in poi la
+vecchia pagina riceve
 *"associazione non piu' valida"* e si rifa' il commissioning.
 
 > ⚠️ Il piedino di commissioning è **GPIO0**, che sulla scheda è libero e non è
 > uno dei piedini di avvio. Va portato verso massa con un filo o un pulsante:
-> non è uno dei tasti presenti a bordo.
+> non è uno dei tasti presenti a bordo. Se non hai un filo a portata di mano,
+> usa il pulsante di BOOT: tenuto premuto oltre l'azzeramento fa la stessa cosa.
 
 Il protocollo completo, pacchetto per pacchetto, sta in
 [`docs/ble-architecture.md`](docs/ble-architecture.md).
@@ -474,6 +481,7 @@ All'avvio compare il banner (output reale, catturato dalla scheda):
   pulsante   GPIO9, attivo basso
   gesti      1 click NOI | 2 click LORO | 3 click annulla
              4 click niente | 4000 ms azzera
+             6000 ms apre il commissioning
   finestra   400 ms per i click multipli
   partita    al meglio di 5 set, serve per primo NOI
   vincitore  4000 ms a video
@@ -555,11 +563,13 @@ configura solo a chip avviato, dopo lo schermo, e non lo tocca prima.
    e `ble: in annuncio come PADEL_SCORE_XXXX`.
 4. Un click → 15 a NOI. Due click → 15 a LORO. Tre click → si torna indietro.
 5. Quattro secondi di pressione → la partita si azzera.
-6. Piedino GPIO0 verso massa per tre secondi → compare la schermata
-   `COMMISSIONING` con il conto alla rovescia.
-7. `cd web; npm run dev` → **COMMISSIONA SCHEDA**, si sceglie
+6. Sei secondi di pressione → compare la schermata `COMMISSIONING` con il conto
+   alla rovescia.
+7. Piedino GPIO0 verso massa per tre secondi → stessa schermata, senza toccare
+   il pulsante.
+8. `cd web; npm run dev` → **COMMISSIONA SCHEDA**, si sceglie
    `PADEL_SCORE_XXXX`, e il tabellone compare e segue i punti.
-8. `scripts\flash.ps1 -Action verify -Port COM18` → la scheda contiene
+9. `scripts\flash.ps1 -Action verify -Port COM18` → la scheda contiene
    esattamente il programma compilato, partizione per partizione.
 
 ---

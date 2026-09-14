@@ -109,9 +109,29 @@ btn_event_t button_update(button_t *b, bool raw_pressed, uint32_t dt_ms)
         break;
 
     case BTN_STATE_RELEASE_WAIT:
-        /* dopo un LONG non si produce altro fino al rilascio */
+        /* Rilasciato: la pressione e' finita e la macchina torna a riposo. */
         if (!b->level) {
             b->state = BTN_STATE_IDLE;
+            break;
+        }
+
+        /*
+         * Il dito e' ancora giu'. Il tempo continua a correre fino alla seconda
+         * soglia, quella del commissioning.
+         *
+         * Il conteggio si ferma sulla soglia invece di crescere senza limite:
+         * cosi' la condizione che fa uscire l'evento diventa falsa subito dopo
+         * averlo emesso, e l'evento esce una volta sola anche se il pulsante
+         * resta premuto per minuti. E' lo stesso problema che il riconoscitore
+         * del piedino di commissioning risolve con una bandierina.
+         */
+        if (b->hold_ms < BTN_VERY_LONG_PRESS_MS) {
+            b->hold_ms += dt_ms;
+
+            if (b->hold_ms >= BTN_VERY_LONG_PRESS_MS) {
+                b->hold_ms = BTN_VERY_LONG_PRESS_MS;
+                return BTN_EVT_VERY_LONG;
+            }
         }
         break;
 

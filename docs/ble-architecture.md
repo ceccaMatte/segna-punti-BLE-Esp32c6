@@ -197,18 +197,20 @@ capire come e' andata anche se ha perso la notifica del momento.
 ```mermaid
 stateDiagram-v2
     [*] --> NonAssociata
-    NonAssociata --> FinestraAperta: GPIO0 basso per 3 s<br/>(si cancella il token)
+    NonAssociata --> FinestraAperta: GPIO0 basso per 3 s<br/>o pulsante tenuto 6 s<br/>(si cancella il token)
     FinestraAperta --> Associata: CLAIM valido<br/>(si salva il token, SUCCESS a video)
     FinestraAperta --> NonAssociata: 60 s senza nessuno<br/>(TIMEOUT a video)
-    Associata --> FinestraAperta: GPIO0 basso per 3 s<br/>(si cancella il token)
+    Associata --> FinestraAperta: GPIO0 basso per 3 s<br/>o pulsante tenuto 6 s<br/>(si cancella il token)
     Associata --> Associata: AUTH con il token giusto
 ```
 
 Le regole, in breve:
 
-- La finestra dura **60 secondi** e si apre solo con il piedino tenuto basso per
-  **3 secondi**. Il gesto scatta **una volta sola**: il piedino deve tornare
-  alto prima di poterne chiedere un'altra.
+- La finestra dura **60 secondi** e si apre in due modi che fanno la stessa cosa:
+  il piedino tenuto basso per **3 secondi**, oppure il pulsante di gioco tenuto
+  premuto oltre l'azzeramento, fino alla soglia lunga (**6 secondi**).
+  Entrambi scattano **una volta sola**: il piedino deve tornare alto, o il
+  pulsante dev'essere rilasciato, prima di poterne chiedere un'altra.
 - Aprire la finestra **cancella l'associazione precedente** e toglie
   l'autenticazione alla connessione in corso. E' voluto: chi apre la finestra sta
   revocando l'associazione che c'era. Nella memoria della scheda non c'e'
@@ -229,7 +231,8 @@ commissioning*, insieme al piedino.
 
 ### Primo commissioning
 
-1. Si tiene GPIO0 verso massa per tre secondi: la scheda cancella quello che
+1. Si tiene GPIO0 verso massa per tre secondi, oppure si tiene premuto il
+   pulsante di gioco fino alla soglia lunga: la scheda cancella quello che
    c'era e apre la finestra. Il display mostra `COMMISSIONING`, il nome, lo
    stato della radio e il conto alla rovescia.
 2. Nella pagina si preme **COMMISSIONA SCHEDA**: il browser mostra la sua

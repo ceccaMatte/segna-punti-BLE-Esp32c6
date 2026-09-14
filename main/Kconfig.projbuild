@@ -112,6 +112,22 @@ menu "Segnapunti padel"
             la pressione lunga i click gia' contati vengono scartati: l'unico
             effetto e' l'azzeramento.
 
+    config PADEL_BUTTON_COMMISSION_MS
+        int "Pressione prolungata per il commissioning (ms)"
+        default 6000
+        range 2000 30000
+        help
+            Non fermandosi all'azzeramento si arriva a questa seconda soglia,
+            che apre la finestra di commissioning: l'associazione salvata
+            viene cancellata e la scheda torna disponibile per una pagina web
+            nuova.
+
+            Serve a chi non vuole attaccare un pulsante o un filo al piedino di
+            commissioning: lo stesso gesto si fa con l'unico tasto di bordo,
+            che e' li' sotto il pollice. Deve essere maggiore del tempo di
+            azzeramento: con i due valori invertiti la compilazione si ferma
+            con un errore, invece di lasciare un gesto che non si distingue.
+
     config PADEL_FINAL_SCREEN_MS
         int "Durata della schermata del vincitore (ms)"
         default 4000
@@ -147,6 +163,23 @@ menu "Segnapunti padel"
             meglio dei 5: vince chi conquista tre set.
 
     comment "Diagnostica"
+
+    config PADEL_GPIO_SCAN
+        bool "Sorveglia i piedini esposti (diagnostica)"
+        default y
+        help
+            Ogni secondo scrive sul monitor seriale lo stato di tutti i piedini
+            che la scheda porta fuori, e una riga a parte ogni volta che uno
+            cambia.
+
+            Serve a capire se un piedino arriva davvero al chip: lo si mette a
+            massa e si guarda se il log se ne accorge. Se il log non se ne
+            accorge, il problema non e' il programma: e' il filo, o il piedino
+            sbagliato.
+
+            Costa una riga di log al secondo: va bene per cercare un difetto,
+            non per lasciarla accesa sempre.
+
 
     config PADEL_LOG_EVENTS
         bool "Stampa gli eventi del pulsante"
