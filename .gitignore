@@ -1,0 +1,15 @@
+# ESP-IDF build output
+build/
+sdkconfig
+sdkconfig.old
+
+# ESP-IDF component manager
+managed_components/
+dependencies.lock
+
+# Test host: eseguibile generato da test/run_tests.ps1
+test/*.exe
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db

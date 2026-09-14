@@ -1,0 +1,121 @@
+menu "Segnapunti padel"
+
+    comment "Schermo"
+
+    config PADEL_BACKLIGHT_PERMILLE
+        int "Luminosita' della retroilluminazione (millesimi)"
+        default 500
+        range 0 500
+        help
+            Luminosita' dello schermo, da 0 a 500 cioe' meta' della potenza
+            massima. Il produttore avverte che tenere la retroilluminazione al
+            massimo per molte ore lascia un alone permanente sul pannello,
+            quindi il limite superiore e' volutamente 500.
+
+    config PADEL_DISPLAY_TEST_PATTERN
+        bool "Mostra la figura di prova all'avvio"
+        default n
+        help
+            Riempie lo schermo con quattro barre verticali e una squadretta
+            nell'angolo in alto a sinistra. Serve al primo montaggio per
+            verificare che i colori siano quelli giusti e che l'immagine non
+            sia specchiata, ruotata o tagliata.
+
+            Va lasciata spenta durante il gioco: la figura resta finche' non
+            viene ridisegnata la schermata.
+
+    comment "Pulsante"
+
+    config PADEL_BUTTON_DEBOUNCE_MS
+        int "Rimbalzo ignorato (ms)"
+        default 25
+        range 1 200
+        help
+            Per quanto tempo il livello del piedino deve restare stabile prima
+            di essere accettato. Valori piu' bassi reagiscono prima ma lasciano
+            passare piu' rimbalzi.
+
+    config PADEL_MULTI_CLICK_MS
+        int "Finestra per i click multipli (ms)"
+        default 400
+        range 150 1000
+        help
+            Quanto si aspetta, dopo un click, per vedere se ne arriva un altro.
+            Un click solo viene eseguito alla scadenza di questa finestra, non
+            al rilascio del pulsante.
+
+            Alzandola si diventa piu' tolleranti con chi clicca piano, ma il
+            punteggio cambia con piu' ritardo.
+
+    config PADEL_LONG_PRESS_MS
+        int "Pressione lunga per l'azzeramento (ms)"
+        default 4000
+        range 1000 10000
+        help
+            Tenendo premuto per questo tempo la partita viene azzerata. Durante
+            la pressione lunga i click gia' contati vengono scartati: l'unico
+            effetto e' l'azzeramento.
+
+    config PADEL_FINAL_SCREEN_MS
+        int "Durata della schermata del vincitore (ms)"
+        default 4000
+        range 1000 60000
+        help
+            Per quanto resta a video chi ha vinto, prima che la partita
+            ricominci da sola. In questo tempo si puo' ancora annullare la
+            palla che ha chiuso il match con tre click, oppure azzerare subito
+            tenendo premuto.
+
+    comment "Partita"
+
+    choice PADEL_FIRST_SERVER
+        prompt "Chi serve per primo"
+        default PADEL_FIRST_SERVER_NOI
+        help
+            Squadra che batte il primo game. Nel padel il primo servizio viene
+            sorteggiato, quindi non c'e' una risposta giusta: si sceglie qui.
+
+        config PADEL_FIRST_SERVER_NOI
+            bool "NOI (pannello di destra)"
+
+        config PADEL_FIRST_SERVER_LORO
+            bool "LORO (pannello di sinistra)"
+    endchoice
+
+    config PADEL_SETS_TO_WIN
+        int "Set necessari per vincere"
+        default 3
+        range 1 5
+        help
+            Al meglio dei 2*N-1 set. Con il valore predefinito 3 si gioca al
+            meglio dei 5: vince chi conquista tre set.
+
+    comment "Diagnostica"
+
+    config PADEL_LOG_EVENTS
+        bool "Stampa gli eventi del pulsante"
+        default n
+        help
+            Per ogni gesto riconosciuto scrive sul monitor seriale quale azione
+            e' stata eseguita. Serve a controllare il comportamento del
+            pulsante senza guardare lo schermo.
+
+    config PADEL_LOG_REDRAW
+        bool "Stampa quante zone vengono ridisegnate a ogni punto"
+        default n
+        help
+            Mostra, a ogni aggiornamento, quante aree sono state riscritte e
+            quanti pixel. Serve a verificare che l'aggiornamento a zone
+            funzioni: durante il gioco devono comparire numeri piccoli, attorno
+            ai diciassettemila pixel, non cinquantacinquemila.
+
+    config PADEL_DEBUG_INVARIANTS
+        bool "Verifica la coerenza dello stato dopo ogni punto"
+        default n
+        help
+            Dopo ogni modifica del punteggio controlla che lo stato della
+            partita sia coerente e, se non lo e', se ne lamenta sul monitor
+            seriale. Costa un po' di tempo per punto: va bene per cercare un
+            difetto, non per giocare sempre.
+
+endmenu

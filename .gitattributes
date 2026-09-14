@@ -1,0 +1,11 @@
+# Fine riga.
+#
+# Git normalizza nel repository e converte al momento del prelievo. Le tabelle
+# dei glifi sono scritte in LF da tools/gen_font.ps1: forzare LF anche al
+# prelievo evita che il file cambi dopo un checkout e che una rigenerazione
+# produca differenze che non esistono davvero.
+* text=auto
+main/font_data.h text eol=lf
+
+# L'eseguibile dei test non e' testo.
+test/*.exe binary
