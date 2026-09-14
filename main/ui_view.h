@@ -36,36 +36,46 @@
  *
  * Da sinistra a destra e dall'alto in basso:
  *
- *   y   0 .. 23   intestazione, con il distintivo del tie-break a destra
- *   y  24 .. 25   riga di separazione
- *   y  28 .. 248  i due pannelli, LORO a sinistra e NOI a destra
- *   y 252 .. 285  riga dei game
- *   y 286 .. 319  riga dei set
+ *   y   4 .. 15   titolo
+ *   y  18 .. 34   riga di separazione, con l'emblema al centro
+ *   y   3 .. 19   distintivo del tie-break, in alto a destra
+ *   y  35 .. 193  i due pannelli con il loro alone, LORO a sinistra e NOI a destra
+ *   y 196 .. 250  riquadro dei game
+ *   y 256 .. 310  riquadro dei set
  */
 
 #define UI_SCREEN_W      172
 #define UI_SCREEN_H      320
 
-#define UI_HEADER_TEXT_X 6
-#define UI_HEADER_TEXT_Y 6
+#define UI_HEADER_TEXT_Y 3
 
-#define UI_DIVIDER_Y     24
-#define UI_DIVIDER_H     2
+/** Riga su cui e' centrato l'emblema della riga di separazione. */
+#define UI_DIVIDER_CY    26
 
-#define UI_PANEL_Y       28
-#define UI_PANEL_W       82
-#define UI_PANEL_H       220
+#define UI_PANEL_Y       38
+#define UI_PANEL_W       79
+#define UI_PANEL_H       152
 #define UI_PANEL_LORO_X  3
-#define UI_PANEL_NOI_X   87
+#define UI_PANEL_NOI_X   90
 
-#define UI_GAME_Y        252
-#define UI_SET_Y         286
-#define UI_ROW_H         34
+/**
+ * Quanti pixel di alone escono dal bordo del pannello.
+ *
+ * Le zone da ridisegnare devono comprendere anche questi, altrimenti l'alone
+ * resta indietro quando il pannello cambia e si vede un bordo fantasma.
+ */
+#define UI_PANEL_GLOW    3
 
-#define UI_TB_X          136
+#define UI_CARD_X        8
+#define UI_CARD_W        156
+#define UI_CARD_H        54
+#define UI_GAME_Y        196
+#define UI_SET_Y         256
+
+#define UI_TB_X          142
 #define UI_TB_Y          3
-#define UI_TB_W          32
-#define UI_TB_H          20
+#define UI_TB_W          26
+#define UI_TB_H          16
 
 /*
  * Misure del contenuto dentro i riquadri.
@@ -81,28 +91,67 @@
 /** Raggio degli angoli dei pannelli. */
 #define UI_PANEL_RADIUS  8
 
+/** Spessore del bordo luminoso dei pannelli. */
+#define UI_PANEL_BORDER  2
+
 /** Spazio orizzontale per la cifra grande. */
 #define UI_SCORE_MAX_W   (UI_PANEL_W - 2 * UI_PANEL_INSET)
 
-/** Centro delle colonne, per allineare numeri e pannelli. */
+/** Centro delle colonne, per allineare nomi, pallini e punteggi. */
 #define UI_COL_LORO_CX   (UI_PANEL_LORO_X + UI_PANEL_W / 2)
 #define UI_COL_NOI_CX    (UI_PANEL_NOI_X + UI_PANEL_W / 2)
 
-/** Centro della riga dei game e di quella dei set, dove va l'etichetta. */
-#define UI_ROW_LABEL_CX  (UI_SCREEN_W / 2)
+/** Centro della schermata, dove stanno titolo, emblema ed etichette. */
+#define UI_CENTER_CX     (UI_SCREEN_W / 2)
 
 /** Riga superiore del nome della squadra. */
-#define UI_NAME_Y        (UI_PANEL_Y + 8)
+#define UI_NAME_Y        (UI_PANEL_Y + 14)
 
 /** Centro del pallino che indica chi serve. */
-#define UI_DOT_CY        (UI_PANEL_Y + 36)
+#define UI_DOT_CY        (UI_PANEL_Y + 50)
 
-/** Raggio del pallino, alone escluso. */
-#define UI_DOT_R         4
+/** Raggio del pallino. */
+#define UI_DOT_R         5
+
+/** Riga superiore della scritta SERVE, sotto il pallino. */
+#define UI_SERVE_Y       (UI_PANEL_Y + 58)
 
 /** Fascia verticale in cui viene centrata la cifra grande. */
-#define UI_SCORE_Y       (UI_PANEL_Y + 44)
-#define UI_SCORE_H       (UI_PANEL_H - 48)
+#define UI_SCORE_Y       (UI_PANEL_Y + 72)
+#define UI_SCORE_H       80
+
+/** Margine fra il bordo del riquadro e l'etichetta GAME o SET. */
+#define UI_CARD_LABEL_DY 7
+
+/** Riga superiore dei due numeri dentro il riquadro. */
+#define UI_CARD_VALUE_DY 22
+
+/** Distanza fra un numero e la barretta che lo separa dall'altro. */
+#define UI_CARD_DASH_GAP 8
+
+/** Dimensioni della barretta fra i due numeri. */
+#define UI_CARD_DASH_W   10
+#define UI_CARD_DASH_H   3
+
+/*
+ * Emblema della riga di separazione: due racchette con i manici che si
+ * incrociano.
+ *
+ * A questa dimensione un disegno fedele sarebbe illeggibile: restano le due
+ * sagome con i manici incrociati, che e' quanto basta a riconoscere il tema
+ * senza rubare spazio al punteggio.
+ */
+#define UI_EMBLEM_HEAD_W  11
+#define UI_EMBLEM_HEAD_H  11
+#define UI_EMBLEM_HANDLE  7
+#define UI_EMBLEM_W       (UI_EMBLEM_HEAD_W * 2 + 4)
+#define UI_EMBLEM_H       (UI_EMBLEM_HEAD_H + UI_EMBLEM_HANDLE)
+
+/** Riga superiore dell'emblema, centrato sulla riga di separazione. */
+#define UI_EMBLEM_TOP     (UI_DIVIDER_CY - 9)
+
+/** Spazio vuoto fra l'emblema e l'inizio dei due tratti di linea. */
+#define UI_EMBLEM_GAP     6
 
 /**
  * Le zone dello schermo che possono cambiare.

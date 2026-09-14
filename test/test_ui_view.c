@@ -330,7 +330,10 @@ static void play_and_check(team_t first_server, uint32_t seed, int max_points)
     match_init(first_server);
 
     const unsigned long full_screen = (unsigned long)UI_SCREEN_W * UI_SCREEN_H;
-    const unsigned long one_panel = (unsigned long)UI_PANEL_W * UI_PANEL_H;
+
+    /* La zona di un pannello comprende l'alone, che esce dal suo bordo. */
+    const unsigned long one_panel =
+        (unsigned long)(UI_PANEL_W + 2 * UI_PANEL_GLOW) * (unsigned long)(UI_PANEL_H + 2 * UI_PANEL_GLOW);
 
     uint32_t rng = seed;
     ui_view_t previous = view_of(match_state());
@@ -426,11 +429,12 @@ static void test_riquadri_disgiunti(void)
         CHECK(r.y + r.h <= UI_SCREEN_H);
     }
 
-    /* nessun buco fra la riga dei game e quella dei set */
+    /* i riquadri in basso stanno sotto i pannelli e dentro lo schermo */
     const gfx_rect_t game = ui_view_slot_rect(UI_SLOT_GAME);
     const gfx_rect_t set = ui_view_slot_rect(UI_SLOT_SET);
-    CHECK_EQ(game.y + game.h, set.y);
-    CHECK_EQ(set.y + set.h, UI_SCREEN_H);
+    CHECK(game.y >= UI_PANEL_Y + UI_PANEL_H);
+    CHECK(game.y + game.h < set.y);
+    CHECK(set.y + set.h <= UI_SCREEN_H);
 
     /* i pannelli stanno sopra la riga dei game, senza sovrapporsi */
     const gfx_rect_t loro = ui_view_slot_rect(UI_SLOT_LORO);
@@ -441,6 +445,13 @@ static void test_riquadri_disgiunti(void)
     /* e il distintivo sta sopra i pannelli */
     const gfx_rect_t tb = ui_view_slot_rect(UI_SLOT_TB);
     CHECK(tb.y + tb.h <= loro.y);
+
+    /* I pannelli hanno un alone che esce dal bordo: la zona deve comprenderlo,
+       altrimenti l'alone vecchio resta sul fondo quando il pannello cambia. */
+    CHECK_EQ(loro.x, UI_PANEL_LORO_X - UI_PANEL_GLOW);
+    CHECK_EQ(loro.w, UI_PANEL_W + 2 * UI_PANEL_GLOW);
+    CHECK_EQ(loro.h, UI_PANEL_H + 2 * UI_PANEL_GLOW);
+    CHECK_EQ(noi.x, UI_PANEL_NOI_X - UI_PANEL_GLOW);
 
     test_end("i riquadri delle zone non si sovrappongono mai");
 }

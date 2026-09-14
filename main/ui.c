@@ -1,19 +1,23 @@
 /**
  * @file ui.c
- * @brief Disegno della schermata: disposizione, colori e aggiornamento a zone.
+ * @brief Disegno della schermata: colori, forme e aggiornamento a zone.
  *
  * Disposizione sullo schermo da 172 x 320, in verticale:
  *
- *     y   0 .. 23   intestazione e distintivo tie-break
- *     y  24 .. 25   riga di separazione
- *     y  28 .. 248  pannello LORO a sinistra, pannello NOI a destra
- *     y 252 .. 285  riga dei game
- *     y 286 .. 319  riga dei set
+ *     y   3 .. 14   titolo, centrato
+ *     y  16 .. 33   emblema con le due racchette, fra due tratti di linea
+ *     y   3 .. 19   distintivo del tie-break, in alto a destra
+ *     y  35 .. 193  pannelli LORO e NOI, alone compreso
+ *     y 196 .. 250  riquadro dei game
+ *     y 256 .. 310  riquadro dei set
  *
  * I riquadri che possono cambiare non si sovrappongono mai fra loro, a parte la
  * schermata del vincitore che copre tutto. E' questa proprieta' a rendere
  * sicuro ridisegnare una zona sola: nessuna zona puo' rovinare il contenuto di
  * un'altra, quindi l'ordine con cui si disegnano non conta.
+ *
+ * Le posizioni e le misure stanno tutte in ui_view.h, insieme alla descrizione
+ * di cosa va mostrato. Qui c'e' soltanto il modo di disegnare.
  */
 #include "ui.h"
 
@@ -25,27 +29,22 @@
 #include "gfx.h"
 
 /* -------------------------------------------------------------------------- */
-/* Note sul disegno                                                           */
-/* -------------------------------------------------------------------------- */
-
-/* Le posizioni e le misure stanno tutte in ui_view.h: sono la stessa cosa della
-   disposizione, e i test sul PC le usano per controllare che il testo entri nei
-   riquadri. Qui c'e' soltanto il modo di disegnare. */
-
-/* -------------------------------------------------------------------------- */
 /* Colori                                                                     */
 /* -------------------------------------------------------------------------- */
 
 #define COL_BG          GFX_RGB(11, 15, 20)
 #define COL_PANEL       GFX_RGB(20, 26, 34)
+#define COL_CARD        GFX_RGB(16, 21, 28)
+#define COL_CARD_EDGE   GFX_RGB(44, 54, 68)
 #define COL_TEXT        GFX_RGB(236, 242, 248)
 #define COL_LABEL       GFX_RGB(126, 140, 158)
 #define COL_DIM         GFX_RGB(84, 96, 112)
 #define COL_TB          GFX_RGB(250, 190, 60)
+#define COL_DASH        GFX_RGB(120, 134, 150)
 
-#define COL_LORO        GFX_RGB(48, 214, 152)
-#define COL_NOI         GFX_RGB(72, 176, 255)
-#define COL_DIVIDER     GFX_RGB(30, 38, 48)
+#define COL_LORO        GFX_RGB(58, 216, 138)
+#define COL_NOI         GFX_RGB(74, 188, 252)
+#define COL_DIVIDER     GFX_RGB(38, 48, 62)
 
 /* -------------------------------------------------------------------------- */
 /* Stato interno                                                              */
@@ -95,18 +94,16 @@ static const char *small_number(char *buf, size_t size, unsigned value)
 /**
  * Il rettangolo che occupa ogni zona.
  *
- * La disposizione vera arriva da ui_view.h, dove sta insieme alla descrizione
- * di cosa va mostrato: cosi' gli stessi numeri servono al disegno e ai test sul
- * PC. Qui si adatta solo la larghezza delle righe in basso, che deve seguire
- * quella del pannello.
+ * La disposizione arriva da ui_view.h, dove sta insieme alla descrizione di
+ * cosa va mostrato: cosi' gli stessi numeri servono al disegno e ai test sul
+ * PC. L'unico adattamento e' la schermata del vincitore, che segue le
+ * dimensioni vere del pannello.
  */
 static gfx_rect_t slot_rect(ui_slot_t slot)
 {
     gfx_rect_t r = ui_view_slot_rect(slot);
 
-    if (slot == UI_SLOT_GAME || slot == UI_SLOT_SET) {
-        r.w = (int16_t)display_width();
-    } else if (slot == UI_SLOT_OVERLAY) {
+    if (slot == UI_SLOT_OVERLAY) {
         r.w = (int16_t)display_width();
         r.h = (int16_t)display_height();
     }
@@ -119,20 +116,26 @@ static gfx_rect_t slot_rect(ui_slot_t slot)
 /* -------------------------------------------------------------------------- */
 
 /**
- * Il pallino che indica chi serve.
+ * Il pallino che indica chi serve, con la scritta sotto.
  *
- * Due cerchi concentrici invece di uno solo: quello esterno, piu' tenue, fa da
- * alone e rende il pallino riconoscibile anche con la coda dell'occhio. Il
- * riquadro e' gia' stato pulito dal pannello, quindi se non tocca a questa
- * squadra non c'e' niente da fare.
+ * Il pallino e' pieno e del colore della squadra, con un anello piu' tenue
+ * attorno: si riconosce con la coda dell'occhio senza doverlo cercare. La
+ * scritta e' grigia, come nell'idea di partenza, perche' il colore serve al
+ * pallino e non al testo.
+ *
+ * Il riquadro e' gia' stato pulito dal pannello, quindi se non tocca a questa
+ * squadra non c'e' niente da cancellare.
  */
-static void draw_serve_dot(int cx, bool serving, uint16_t accent)
+static void draw_serve_indicator(int cx, bool serving, uint16_t accent)
 {
     if (!serving) {
         return;
     }
-    gfx_fill_circle(&s_g, cx, UI_DOT_CY, UI_DOT_R + 3, mix(COL_PANEL, accent, 70));
+
+    gfx_fill_circle(&s_g, cx, UI_DOT_CY, UI_DOT_R + 3, mix(COL_PANEL, accent, 55));
     gfx_fill_circle(&s_g, cx, UI_DOT_CY, UI_DOT_R, accent);
+
+    gfx_text_centered(&s_g, font_get(FONT_ID_TINY), "SERVE", cx, UI_SERVE_Y, COL_LABEL);
 }
 
 /**
@@ -150,47 +153,94 @@ static void draw_score(const char *text, int cx)
     gfx_text_centered(&s_g, f, text, cx, y, COL_TEXT);
 }
 
+/**
+ * L'alone attorno al pannello.
+ *
+ * Sono tre corniche sempre piu' tenui che si allargano verso l'esterno. Non
+ * serve nessuna sfocatura: a questa dimensione l'occhio legge la successione di
+ * luminosita' come un alone morbido, e il costo e' di poche centinaia di pixel.
+ */
+static void draw_panel_glow(int x, int y, int w, int h, uint16_t accent)
+{
+    for (int step = UI_PANEL_GLOW; step >= 1; --step) {
+        /* Piu' la cornice e' lontana dal bordo, piu' e' tenue. */
+        const uint8_t weight = (uint8_t)(40 + (UI_PANEL_GLOW - step) * 45);
+
+        gfx_stroke_rect_rounded(&s_g, x - step, y - step, w + 2 * step, h + 2 * step,
+                                UI_PANEL_RADIUS + step, 1, mix(COL_BG, accent, weight));
+    }
+}
+
 /** Il pannello di una squadra: nome, pallino e punteggio, riscritti da zero. */
 static void draw_panel(const ui_view_t *v, team_t team)
 {
     const int x = (team == TEAM_THEM) ? UI_PANEL_LORO_X : UI_PANEL_NOI_X;
+    const ui_slot_t slot = (team == TEAM_THEM) ? UI_SLOT_LORO : UI_SLOT_NOI;
     const uint16_t accent = team_accent(team);
+    const gfx_rect_t area = slot_rect(slot);
 
-    /*
-     * Prima si stende il fondo della pagina su tutto il rettangolo, poi si
-     * disegna la sagoma arrotondata. Serve perche' gli angoli del rettangolo
-     * stanno fuori dalla sagoma: senza questa passata resterebbero visibili i
-     * colori dell'aggiornamento precedente.
-     */
-    gfx_fill_rect(&s_g, x, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H, COL_BG);
+    /* Si ripulisce tutto il riquadro della zona, alone compreso: cosi' non
+       resta niente del disegno precedente, nemmeno fuori dal pannello. */
+    gfx_fill_rect(&s_g, area.x, area.y, area.w, area.h, COL_BG);
+
+    draw_panel_glow(x, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H, accent);
+
+    /* Il corpo del pannello copre la parte di alone che cade all'interno. */
     gfx_fill_rect_rounded(&s_g, x, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H, UI_PANEL_RADIUS, COL_PANEL);
-    gfx_stroke_rect_rounded(&s_g, x, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H, UI_PANEL_RADIUS, 2,
-                            mix(COL_PANEL, accent, 150));
+    gfx_stroke_rect_rounded(&s_g, x, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H, UI_PANEL_RADIUS,
+                            UI_PANEL_BORDER, accent);
 
     const int cx = x + UI_PANEL_W / 2;
 
     gfx_text_centered(&s_g, font_get(FONT_ID_LABEL), team_name(team), cx, UI_NAME_Y, accent);
 
-    draw_serve_dot(cx, (team == TEAM_THEM) ? v->loro_serve : v->noi_serve, accent);
+    draw_serve_indicator(cx, (team == TEAM_THEM) ? v->loro_serve : v->noi_serve, accent);
 
     draw_score((team == TEAM_THEM) ? v->loro_score : v->noi_score, cx);
 }
 
-/** Una delle due righe in basso: etichetta al centro, un numero per lato. */
-static void draw_row(int row_y, const char *label, uint8_t loro_value, uint8_t noi_value)
+/**
+ * Uno dei due riquadri in basso: etichetta sopra, poi i due numeri separati da
+ * una barretta.
+ *
+ * I numeri sono centrati come un blocco unico, non allineati alle colonne dei
+ * pannelli: e' quello che rende il riquadro leggibile come "3 - 2" invece che
+ * come due cifre sparse.
+ */
+static void draw_card(int card_y, const char *label, uint8_t loro_value, uint8_t noi_value)
 {
-    gfx_fill_rect(&s_g, 0, row_y, display_width(), UI_ROW_H, COL_BG);
+    const font_t *nums = font_get(FONT_ID_SCORE_XS);
 
-    const font_t *f = font_get(FONT_ID_LABEL);
-    const int text_y = row_y + (UI_ROW_H - (int)f->cell_height) / 2;
+    gfx_fill_rect(&s_g, UI_CARD_X, card_y, UI_CARD_W, UI_CARD_H, COL_BG);
+    gfx_fill_rect_rounded(&s_g, UI_CARD_X, card_y, UI_CARD_W, UI_CARD_H, 10, COL_CARD);
+    gfx_stroke_rect_rounded(&s_g, UI_CARD_X, card_y, UI_CARD_W, UI_CARD_H, 10, 1, COL_CARD_EDGE);
 
-    gfx_text_centered(&s_g, f, label, UI_ROW_LABEL_CX, text_y, COL_LABEL);
+    gfx_text_centered(&s_g, font_get(FONT_ID_TINY), label, UI_CENTER_CX,
+                      card_y + UI_CARD_LABEL_DY, COL_LABEL);
 
-    char buf[4];
-    gfx_text_centered(&s_g, f, small_number(buf, sizeof(buf), loro_value), UI_COL_LORO_CX, text_y,
-                      mix(COL_BG, COL_LORO, 210));
-    gfx_text_centered(&s_g, f, small_number(buf, sizeof(buf), noi_value), UI_COL_NOI_CX, text_y,
-                      mix(COL_BG, COL_NOI, 210));
+    char left_buf[4];
+    char right_buf[4];
+    const char *left = small_number(left_buf, sizeof(left_buf), loro_value);
+    const char *right = small_number(right_buf, sizeof(right_buf), noi_value);
+
+    const int w_left = (int)font_measure_text(nums, left);
+    const int w_right = (int)font_measure_text(nums, right);
+    const int total = w_left + UI_CARD_DASH_GAP + UI_CARD_DASH_W + UI_CARD_DASH_GAP + w_right;
+    const int x0 = UI_CENTER_CX - total / 2;
+    const int value_y = card_y + UI_CARD_VALUE_DY;
+
+    gfx_text(&s_g, nums, left, x0, value_y, COL_LORO);
+
+    /* La barretta sta a meta' altezza delle cifre, non della cella: le cifre
+       non riempiono tutta la cella del font, e allineandola alla cella
+       sembrerebbe piu' bassa. */
+    gfx_fill_rect_rounded(&s_g, x0 + w_left + UI_CARD_DASH_GAP,
+                          value_y + ((int)nums->cell_height - UI_CARD_DASH_H) / 2,
+                          UI_CARD_DASH_W, UI_CARD_DASH_H, 1, COL_DASH);
+
+    gfx_text(&s_g, nums, right,
+             x0 + w_left + UI_CARD_DASH_GAP + UI_CARD_DASH_W + UI_CARD_DASH_GAP,
+             value_y, COL_NOI);
 }
 
 /** Il distintivo del tie-break, in alto a destra. */
@@ -217,8 +267,9 @@ static void draw_overlay(const ui_view_t *v)
 
     gfx_fill_rect(&s_g, 0, 0, w, h, COL_BG);
 
-    /* Una barra nel colore della squadra vincitrice, per riconoscerla subito. */
-    gfx_fill_rect_rounded(&s_g, 20, 56, w - 40, 6, 3, accent);
+    /* Il pannello del vincitore, con lo stesso bordo luminoso dei due in alto. */
+    gfx_fill_rect_rounded(&s_g, 18, 60, w - 36, 200, UI_PANEL_RADIUS, COL_PANEL);
+    gfx_stroke_rect_rounded(&s_g, 18, 60, w - 36, 200, UI_PANEL_RADIUS, UI_PANEL_BORDER, accent);
 
     const font_t *label = font_get(FONT_ID_LABEL);
     gfx_text_centered(&s_g, label, "VINCE", w / 2, 84, COL_LABEL);
@@ -247,10 +298,10 @@ static void draw_slot(ui_slot_t slot, const ui_view_t *v)
         draw_panel(v, TEAM_US);
         break;
     case UI_SLOT_GAME:
-        draw_row(UI_GAME_Y, "GAME", v->loro_games, v->noi_games);
+        draw_card(UI_GAME_Y, "GAME", v->loro_games, v->noi_games);
         break;
     case UI_SLOT_SET:
-        draw_row(UI_SET_Y, "SET", v->loro_sets, v->noi_sets);
+        draw_card(UI_SET_Y, "SET", v->loro_sets, v->noi_sets);
         break;
     case UI_SLOT_OVERLAY:
         if (v->overlay) {
@@ -266,14 +317,49 @@ static void draw_slot(ui_slot_t slot, const ui_view_t *v)
 /* Parte fissa                                                                */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * L'emblema: due racchette con i manici che si incrociano.
+ *
+ * Le teste sono due sagome arrotondate; i manici sono segmenti orizzontali
+ * spostati di un pixel per riga, che e' il modo piu' semplice di disegnare una
+ * linea obliqua senza tirarsi dietro tutta la matematica delle rette.
+ */
+static void draw_emblem(int cx, uint16_t color)
+{
+    const int head_y = UI_EMBLEM_TOP;
+
+    gfx_fill_rect_rounded(&s_g, cx - 13, head_y, UI_EMBLEM_HEAD_W, UI_EMBLEM_HEAD_H, 5, color);
+    gfx_fill_rect_rounded(&s_g, cx + 2, head_y, UI_EMBLEM_HEAD_W, UI_EMBLEM_HEAD_H, 5, color);
+
+    for (int i = 0; i < UI_EMBLEM_HANDLE; ++i) {
+        const int y = head_y + UI_EMBLEM_HEAD_H + i;
+        gfx_fill_rect(&s_g, cx - 8 + i, y, 3, 1, color);
+        gfx_fill_rect(&s_g, cx + 5 - i, y, 3, 1, color);
+    }
+}
+
 static void draw_static(void)
 {
     gfx_clear(&s_g, COL_BG);
 
-    gfx_text(&s_g, font_get(FONT_ID_TINY), "PADEL SCORE", UI_HEADER_TEXT_X, UI_HEADER_TEXT_Y,
-             COL_LABEL);
+    gfx_text_centered(&s_g, font_get(FONT_ID_TINY), "PADEL SCORE", UI_CENTER_CX, UI_HEADER_TEXT_Y,
+                      COL_LABEL);
 
-    gfx_fill_rect(&s_g, 0, UI_DIVIDER_Y, display_width(), UI_DIVIDER_H, COL_DIVIDER);
+    /* La riga di separazione e' interrotta al centro dall'emblema. */
+    const int margin = 8;
+    const int left_x0 = margin;
+    const int left_w = (UI_CENTER_CX - UI_EMBLEM_W / 2 - UI_EMBLEM_GAP) - left_x0;
+    const int right_x0 = UI_CENTER_CX + UI_EMBLEM_W / 2 + UI_EMBLEM_GAP;
+    const int right_w = (UI_SCREEN_W - margin) - right_x0;
+
+    if (left_w > 0) {
+        gfx_fill_rect(&s_g, left_x0, UI_DIVIDER_CY, left_w, 1, COL_DIVIDER);
+    }
+    if (right_w > 0) {
+        gfx_fill_rect(&s_g, right_x0, UI_DIVIDER_CY, right_w, 1, COL_DIVIDER);
+    }
+
+    draw_emblem(UI_CENTER_CX, COL_LABEL);
 }
 
 /* -------------------------------------------------------------------------- */

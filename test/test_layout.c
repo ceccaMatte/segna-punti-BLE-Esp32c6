@@ -194,7 +194,7 @@ static void test_cifra_dentro_la_sua_fascia(void)
     /*
      * La cifra viene centrata in una fascia verticale del pannello. Se il font
      * piu' alto non ci stesse, uscirebbe sopra o sotto e andrebbe a finire
-     * addosso al nome della squadra o alla cornice.
+     * addosso al pallino o alla cornice.
      */
     for (int id = 0; id < (int)FONT_ID_COUNT; ++id) {
         const font_t *f = font_get((font_id_t)id);
@@ -208,11 +208,20 @@ static void test_cifra_dentro_la_sua_fascia(void)
         CHECK(top + height <= UI_PANEL_Y + UI_PANEL_H);
     }
 
-    /* il nome della squadra e il pallino non devono finire addosso alla cifra */
+    /* nome, pallino, scritta SERVE e cifra, uno sotto l'altro senza toccarsi */
     const int name_bottom = UI_NAME_Y + (int)font_get(FONT_ID_LABEL)->cell_height;
-    const int dot_bottom = UI_DOT_CY + UI_DOT_R + 3;
-    CHECK(name_bottom < UI_DOT_CY - UI_DOT_R - 3);
-    CHECK(dot_bottom <= UI_SCORE_Y);
+    const int dot_top = UI_DOT_CY - UI_DOT_R;
+    const int dot_bottom = UI_DOT_CY + UI_DOT_R;
+    const int serve_bottom = UI_SERVE_Y + (int)font_get(FONT_ID_TINY)->cell_height;
+
+    CHECK(name_bottom < dot_top);
+    CHECK(dot_bottom < UI_SERVE_Y);
+    CHECK(serve_bottom <= UI_SCORE_Y);
+
+    /* e tutto quanto resta dentro il pannello */
+    CHECK(UI_SERVE_Y >= UI_PANEL_Y);
+    CHECK(serve_bottom < UI_PANEL_Y + UI_PANEL_H);
+    CHECK(UI_NAME_Y >= UI_PANEL_Y);
 
     test_end("la cifra sta nella fascia verticale prevista");
 }
@@ -221,52 +230,115 @@ static void test_cifra_dentro_la_sua_fascia(void)
 /* Righe dei game e dei set                                                   */
 /* -------------------------------------------------------------------------- */
 
-static void test_righe_non_si_sovrappongono(void)
+/** La larghezza della cifra piu' larga di un font. */
+static int widest_digit(const font_t *f)
 {
-    test_begin("l'etichetta della riga non si sovrappone ai due numeri");
-
-    /*
-     * Nella riga dei game l'etichetta sta al centro e i due numeri stanno sotto
-     * i rispettivi pannelli. Se l'etichetta fosse piu' larga del previsto, il
-     * numero di sinistra le finirebbe addosso: un errore che sullo schermo si
-     * vede come due scritte accavallate.
-     */
-    const font_t *f = font_get(FONT_ID_LABEL);
-
-    const struct {
-        const char *label;
-        int         max_value;
-    } rows[] = {
-        { "GAME", 7 },
-        { "SET", MATCH_SETS_TO_WIN },
-    };
-
-    for (size_t r = 0; r < sizeof(rows) / sizeof(rows[0]); ++r) {
-        const int label_w = (int)font_measure_text(f, rows[r].label);
-        const int label_left = UI_ROW_LABEL_CX - label_w / 2;
-        const int label_right = label_left + label_w;
-
-        for (int value = 0; value <= rows[r].max_value; ++value) {
-            /* il buffer e' piu' largo del necessario solo per non far
-               protestare il compilatore sulla possibile troncatura */
-            char text[12];
-            (void)snprintf(text, sizeof(text), "%d", value);
-            const int w = (int)font_measure_text(f, text);
-
-            /* numero di sinistra */
-            const int l_left = UI_COL_LORO_CX - w / 2;
-            const int l_right = l_left + w;
-            CHECK(l_right < label_left);
-            CHECK(l_left > UI_PANEL_LORO_X);
-
-            /* numero di destra */
-            const int n_left = UI_COL_NOI_CX - w / 2;
-            CHECK(n_left > label_right);
-            CHECK(n_left + w < UI_PANEL_NOI_X + UI_PANEL_W);
+    int widest = 0;
+    for (char c = '0'; c <= '9'; ++c) {
+        const glyph_t *glyph = font_glyph(f, c);
+        if (glyph != NULL && (int)glyph->advance > widest) {
+            widest = (int)glyph->advance;
         }
     }
+    return widest;
+}
 
-    test_end("l'etichetta della riga non si sovrappone ai due numeri");
+static void test_riquadri_in_basso(void)
+{
+    test_begin("il contenuto dei riquadri GAME e SET sta dentro i riquadri");
+
+    const font_t *tiny = font_get(FONT_ID_TINY);
+    const font_t *nums = font_get(FONT_ID_SCORE_XS);
+
+    /* etichetta e numeri, uno sotto l'altro, senza toccarsi */
+    const int label_bottom = UI_CARD_LABEL_DY + (int)tiny->cell_height;
+    CHECK(label_bottom <= UI_CARD_VALUE_DY);
+    CHECK(UI_CARD_VALUE_DY + (int)nums->cell_height <= UI_CARD_H);
+
+    CHECK((int)font_measure_text(tiny, "GAME") < UI_CARD_W);
+    CHECK((int)font_measure_text(tiny, "SET") < UI_CARD_W);
+
+    /*
+     * I due numeri con la barretta in mezzo, centrati come un blocco unico.
+     * Il caso peggiore sono due cifre larghe, quindi si misura quella piu'
+     * larga del font invece di sperare che "3" e "2" siano rappresentative.
+     */
+    const int widest = widest_digit(nums);
+    CHECK(widest > 0);
+
+    const int total = widest + UI_CARD_DASH_GAP + UI_CARD_DASH_W + UI_CARD_DASH_GAP + widest;
+    CHECK(total < UI_CARD_W);
+
+    /* il blocco e' centrato: avanza lo stesso spazio a destra e a sinistra */
+    const int x0 = UI_CENTER_CX - total / 2;
+    CHECK(x0 >= UI_CARD_X);
+    CHECK(x0 + total <= UI_CARD_X + UI_CARD_W);
+
+    /* la barretta sta dentro l'altezza delle cifre */
+    const int dash_top = UI_CARD_VALUE_DY + ((int)nums->cell_height - UI_CARD_DASH_H) / 2;
+    CHECK(dash_top >= UI_CARD_VALUE_DY);
+    CHECK(dash_top + UI_CARD_DASH_H <= UI_CARD_VALUE_DY + (int)nums->cell_height);
+
+    /* i due riquadri non si toccano */
+    CHECK(UI_GAME_Y + UI_CARD_H < UI_SET_Y);
+    CHECK(UI_SET_Y + UI_CARD_H <= UI_SCREEN_H);
+
+    test_end("il contenuto dei riquadri GAME e SET sta dentro i riquadri");
+}
+
+static void test_emblema(void)
+{
+    test_begin("l'emblema sta fra il titolo e i pannelli");
+
+    const font_t *tiny = font_get(FONT_ID_TINY);
+    const int title_bottom = UI_HEADER_TEXT_Y + (int)tiny->cell_height;
+
+    CHECK(UI_EMBLEM_TOP > title_bottom);
+    CHECK(UI_EMBLEM_TOP + UI_EMBLEM_H <= UI_PANEL_Y - UI_PANEL_GLOW);
+
+    /* i due tratti di linea ai lati devono essere lunghi abbastanza da vedersi */
+    const int left_x0 = 8;
+    const int left_w = (UI_CENTER_CX - UI_EMBLEM_W / 2 - UI_EMBLEM_GAP) - left_x0;
+    CHECK(left_w > 20);
+
+    /* la riga di separazione cade dentro l'emblema, non fuori */
+    CHECK(UI_DIVIDER_CY >= UI_EMBLEM_TOP);
+    CHECK(UI_DIVIDER_CY < UI_EMBLEM_TOP + UI_EMBLEM_H);
+
+    /* e l'emblema non finisce sotto il distintivo del tie-break */
+    CHECK(UI_CENTER_CX + UI_EMBLEM_W / 2 < UI_TB_X);
+
+    test_end("l'emblema sta fra il titolo e i pannelli");
+}
+
+static void test_distintivo_tie_break(void)
+{
+    test_begin("il distintivo del tie-break non copre il titolo");
+
+    const font_t *tiny = font_get(FONT_ID_TINY);
+    const int badge_text_w = (int)font_measure_text(tiny, "TB");
+
+    CHECK(badge_text_w < UI_TB_W);
+    CHECK((int)tiny->cell_height < UI_TB_H);
+    CHECK(UI_TB_X + UI_TB_W <= UI_SCREEN_W);
+
+    /*
+     * Il titolo e' centrato. Il suo bordo destro non deve finire sotto il
+     * distintivo, altrimenti quando comincia il tie-break la scritta PADEL
+     * SCORE verrebbe coperta a meta'.
+     */
+    const int title_w = (int)font_measure_text(tiny, "PADEL SCORE");
+    CHECK(UI_CENTER_CX + title_w / 2 < UI_TB_X);
+
+    /* il distintivo resta sopra i pannelli e non tocca l'emblema */
+    CHECK(UI_TB_Y + UI_TB_H <= UI_PANEL_Y - UI_PANEL_GLOW);
+
+    /* il testo sta dentro il distintivo */
+    const int text_left = UI_TB_X + UI_TB_W / 2 - badge_text_w / 2;
+    CHECK(text_left >= UI_TB_X);
+    CHECK(text_left + badge_text_w <= UI_TB_X + UI_TB_W);
+
+    test_end("il distintivo del tie-break non copre il titolo");
 }
 
 static void test_nome_squadra_entra(void)
@@ -297,32 +369,6 @@ static void test_nome_squadra_entra(void)
     test_end("il nome della squadra entra nel pannello");
 }
 
-static void test_distintivo_tie_break(void)
-{
-    test_begin("il distintivo del tie-break sta nella sua zona");
-
-    const font_t *f = font_get(FONT_ID_TINY);
-    const int w = (int)font_measure_text(f, "TB");
-    const int h = (int)f->cell_height;
-
-    CHECK(w < UI_TB_W);
-    CHECK(h < UI_TB_H);
-
-    /* deve stare dentro l'intestazione, sopra la riga di separazione */
-    CHECK(UI_TB_Y + UI_TB_H <= UI_DIVIDER_Y);
-
-    /* e non deve toccare la scritta dell'intestazione, che sta a sinistra */
-    const int header_w = (int)font_measure_text(f, "PADEL SCORE");
-    CHECK(UI_HEADER_TEXT_X + header_w <= UI_TB_X);
-
-    /* il testo del distintivo deve stare dentro il distintivo */
-    const int tb_text_left = UI_TB_X + UI_TB_W / 2 - w / 2;
-    CHECK(tb_text_left >= UI_TB_X);
-    CHECK(tb_text_left + w <= UI_TB_X + UI_TB_W);
-
-    test_end("il distintivo del tie-break sta nella sua zona");
-}
-
 /* -------------------------------------------------------------------------- */
 /* Punto di ingresso                                                          */
 /* -------------------------------------------------------------------------- */
@@ -336,7 +382,8 @@ void test_layout_all(void)
     test_primo_disegno_copre_tutto();
     test_cifra_centrata_sta_nel_pannello();
     test_cifra_dentro_la_sua_fascia();
-    test_righe_non_si_sovrappongono();
+    test_riquadri_in_basso();
+    test_emblema();
     test_nome_squadra_entra();
     test_distintivo_tie_break();
 }

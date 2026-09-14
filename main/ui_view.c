@@ -199,14 +199,23 @@ gfx_rect_t ui_view_slot_rect(ui_slot_t slot)
     switch (slot) {
     case UI_SLOT_TB:
         return (gfx_rect_t){ UI_TB_X, UI_TB_Y, UI_TB_W, UI_TB_H };
+
+    /*
+     * I pannelli hanno un alone che esce dal loro bordo: la zona da ridisegnare
+     * deve comprenderlo, altrimenti quando il pannello cambia l'alone vecchio
+     * resta sul fondo e se ne vede un secondo accanto.
+     */
     case UI_SLOT_LORO:
-        return (gfx_rect_t){ UI_PANEL_LORO_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H };
+        return (gfx_rect_t){ UI_PANEL_LORO_X - UI_PANEL_GLOW, UI_PANEL_Y - UI_PANEL_GLOW,
+                             UI_PANEL_W + 2 * UI_PANEL_GLOW, UI_PANEL_H + 2 * UI_PANEL_GLOW };
     case UI_SLOT_NOI:
-        return (gfx_rect_t){ UI_PANEL_NOI_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H };
+        return (gfx_rect_t){ UI_PANEL_NOI_X - UI_PANEL_GLOW, UI_PANEL_Y - UI_PANEL_GLOW,
+                             UI_PANEL_W + 2 * UI_PANEL_GLOW, UI_PANEL_H + 2 * UI_PANEL_GLOW };
+
     case UI_SLOT_GAME:
-        return (gfx_rect_t){ 0, UI_GAME_Y, UI_SCREEN_W, UI_ROW_H };
+        return (gfx_rect_t){ UI_CARD_X, UI_GAME_Y, UI_CARD_W, UI_CARD_H };
     case UI_SLOT_SET:
-        return (gfx_rect_t){ 0, UI_SET_Y, UI_SCREEN_W, UI_ROW_H };
+        return (gfx_rect_t){ UI_CARD_X, UI_SET_Y, UI_CARD_W, UI_CARD_H };
     case UI_SLOT_OVERLAY:
         return (gfx_rect_t){ 0, 0, UI_SCREEN_W, UI_SCREEN_H };
     default:
