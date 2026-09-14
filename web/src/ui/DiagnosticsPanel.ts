@@ -36,11 +36,12 @@ export class DiagnosticsPanel {
         ['Disconnessioni', String(diagnostics.disconnects)],
         ['Riconnessioni', String(diagnostics.reconnects)],
         ['Ultima interruzione', ageText(diagnostics.lastOutageMs)],
+        ['Battiti ricevuti', String(diagnostics.heartbeats)],
         [
           'Ultimo aggiornamento',
           diagnostics.lastUpdate === null ? '—' : new Date(diagnostics.lastUpdate).toLocaleTimeString(),
         ],
-        ['Eta\' ultimo aggiornamento', ageText(diagnostics.ageMs(now))],
+        ['Eta\' ultimo contatto', ageText(diagnostics.ageMs(now))],
         ['Ultimo errore', diagnostics.lastError ?? '—'],
       ]),
     );

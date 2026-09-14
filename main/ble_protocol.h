@@ -128,6 +128,24 @@ typedef enum {
 #define PADEL_FLAG_FINISHED    0x02u /**< partita conclusa                      */
 #define PADEL_FLAG_SERVING_NOI 0x04u /**< serve NOI (altrimenti LORO)           */
 
+/**
+ * Il pacchetto non porta niente di nuovo: e' un battito.
+ *
+ * La scheda manda lo stesso stato di prima a intervalli regolari, anche quando
+ * il punteggio non cambia, e il numero di sequenza resta quello.
+ *
+ * Serve alla pagina web, e a una cosa sola: distinguere "non sta succedendo
+ * niente" da "la scheda non c'e' piu'". Senza il battito l'unico modo di
+ * accorgersi di un riavvio sarebbe aspettare che il sistema dichiari caduto il
+ * collegamento, e da solo ci mette piu' di dieci secondi — il tempo di
+ * supervisione del Bluetooth. Col battito la pagina lo capisce in tre secondi,
+ * chiude il collegamento morto e riprende.
+ *
+ * Chi lo riceve sa che e' identico a quello di prima: non e' un aggiornamento,
+ * e non va contato come un pacchetto arrivato due volte.
+ */
+#define PADEL_FLAG_HEARTBEAT   0x08u
+
 /** Segna che il campo "vincitore" non significa niente. */
 #define PADEL_WINNER_NONE 0xFFu
 

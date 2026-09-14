@@ -23,6 +23,7 @@
 import { PadelBleClient, bluetoothAvailable, listKnownDevices, type KnownDevice } from './ble/PadelBleClient';
 import { PacketDiagnostics } from './ble/diagnostics';
 import { shortIdFromValue } from './ble/hex';
+import { SilenceWatch } from './ble/liveness';
 import { AutoReconnect } from './ble/reconnect';
 import {
   CommissioningState,
@@ -58,6 +59,9 @@ function need(id: string): HTMLElement {
 
 const storage = new CommissioningStorage();
 const diagnostics = new PacketDiagnostics();
+
+/** Il conto del silenzio: da quanto la scheda non si fa sentire. */
+const silence = new SilenceWatch();
 
 let association: Association | null = storage.load();
 let info: DeviceInfoPacket | null = null;
@@ -111,6 +115,9 @@ const connection = new ConnectionPanel(
 const client = new PadelBleClient({
   onConnected: () => {
     message = null;
+    /* Il conto del silenzio riparte da capo: la prima cosa che si aspetta e'
+       il battito della scheda appena collegata. */
+    silence.reset();
     /* Se prima c'era stata un'interruzione, si sa quanto e' durata. */
     diagnostics.noteReconnect(Date.now());
     /* Il collegamento c'e': il conto dei tentativi riparte da zero. */
@@ -215,7 +222,30 @@ function handleStatus(packet: CommissioningStatusPacket): void {
 }
 
 function applyScore(packet: ScoreStatePacket): void {
-  diagnostics.notePacket(packet.sequence, Date.now());
+  const now = Date.now();
+  silence.noteAlive(now);
+
+  if (packet.heartbeat) {
+    /*
+     * Non e' successo niente: la scheda si e' fatta sentire. Serve a sapere che
+     * c'e' — ed e' quello che permette di accorgersi in tre secondi che non c'e'
+     * piu' — e a rinfrescare l'eta' dell'ultimo contatto.
+     *
+     * La pagina non si ridisegna: rifare i pulsanti sotto le dita di chi sta
+     * per premere e' peggio di un tabellone che resta com'era.
+     */
+    diagnostics.noteHeartbeat(now);
+
+    if (score === null) {
+      /* Primo contatto: il battito porta comunque lo stato intero, e vale la
+         pena di mostrarlo. */
+      score = toView(packet);
+      render();
+    }
+    return;
+  }
+
+  diagnostics.notePacket(packet.sequence, now);
   score = toView(packet);
   render();
 }
@@ -563,6 +593,27 @@ setInterval(() => {
   statusBand.render(statusFacts(), dataFacts(), retryFacts(), identLine());
   diagnosticsPanel.render(diagnostics, Date.now());
 }, 1000);
+
+/*
+ * Il controllo del battito.
+ *
+ * Gira piu' spesso del disegno perche' da lui dipende quanto ci si mette ad
+ * accorgersi che la scheda non c'e' piu'. Scaduto il silenzio il collegamento
+ * si chiude a mano: un `disconnect()` esplicito non aspetta la supervisione del
+ * Bluetooth, che da sola impiegherebbe una decina di secondi. Da li' in poi fa
+ * tutto la riconnessione automatica.
+ */
+setInterval(() => {
+  if (!client.connected || status?.authenticated !== true) {
+    return;
+  }
+
+  if (silence.expired(Date.now())) {
+    message = 'La scheda non risponde piu\': chiudo il collegamento e la riprendo.';
+    silence.reset();
+    void client.disconnect();
+  }
+}, 500);
 
 /*
  * Tornando sulla scheda del browser puo' essere passato un pezzo: se in quel

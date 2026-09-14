@@ -77,10 +77,39 @@ static void test_codifica_stato_byte_per_byte(void)
     test_end(name);
 }
 
+static void test_battito(void)
+{
+    const char *name = "protocollo: il battito si riconosce dal bit";
+    test_begin(name);
+
+    /*
+     * Un battito e' lo stato di prima con un bit in piu' e lo stesso numero di
+     * sequenza: chi lo riceve sa che non e' successo niente, e che la scheda
+     * c'e'. E' quello che permette alla pagina di accorgersi di un riavvio
+     * senza aspettare il tempo di supervisione del Bluetooth.
+     */
+    padel_score_packet_t packet = { 0 };
+    packet.flags = PADEL_FLAG_HEARTBEAT | PADEL_FLAG_SERVING_NOI;
+    packet.winner = PADEL_WINNER_NONE;
+    packet.sequence = 7u;
+    packet.points[1] = 1u;
+
+    uint8_t buffer[PADEL_SCORE_PACKET_SIZE];
+    CHECK_EQ(padel_score_encode(&packet, buffer, sizeof(buffer)), PADEL_SCORE_PACKET_SIZE);
+    CHECK_EQ(buffer[2], 0x0Cu); /* battito + serve NOI */
+
+    padel_score_packet_t read_back;
+    CHECK(padel_score_decode(buffer, sizeof(buffer), &read_back));
+    CHECK_EQ(read_back.flags & PADEL_FLAG_HEARTBEAT, PADEL_FLAG_HEARTBEAT);
+    CHECK_EQ(read_back.sequence, 7);
+    CHECK_EQ(read_back.points[1], 1);
+
+    test_end(name);
+}
+
 static void test_andata_e_ritorno(void)
 {
-    const char *name = "protocollo: quello che si scrive si rilegge uguale";
-    test_begin(name);
+    const char *name = "protocollo: quello che si scrive si rilegge uguale";    test_begin(name);
 
     padel_score_packet_t original = { 0 };
     original.flags = PADEL_FLAG_FINISHED;
@@ -268,6 +297,7 @@ void test_ble_protocol_all(void)
 
     test_dimensioni();
     test_codifica_stato_byte_per_byte();
+    test_battito();
     test_andata_e_ritorno();
     test_stato_rifiutato_se_non_valido();
     test_codifica_stato_commissioning();

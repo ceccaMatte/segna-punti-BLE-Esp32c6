@@ -77,6 +77,32 @@ describe('tempi ed errori', () => {
     expect(diagnostics.ageMs(5000)).toBe(1000);
   });
 
+  it('un battito tiene vivo il contatto ma non e\' un pacchetto', () => {
+    diagnostics.notePacket(3, 1000);
+    diagnostics.noteHeartbeat(2500);
+
+    expect(diagnostics.heartbeats).toBe(1);
+    /* Il contatto e' fresco: la scheda c'e'. */
+    expect(diagnostics.ageMs(2600)).toBe(100);
+    /* I conti dei pacchetti, invece, non si muovono. */
+    expect(diagnostics.packets).toBe(1);
+    expect(diagnostics.lastSequence).toBe(3);
+    expect(diagnostics.duplicates).toBe(0);
+    expect(diagnostics.gaps).toBe(0);
+  });
+
+  it('i battiti non fanno sembrare persi i cambiamenti veri', () => {
+    diagnostics.notePacket(1, 1000);
+    diagnostics.noteHeartbeat(2000);
+    diagnostics.noteHeartbeat(3000);
+    diagnostics.notePacket(4, 4000);
+
+    /* Fra il 2 e il 3 e' cambiato qualcosa, e non e' arrivato: due pacchetti
+       persi veri. I battiti in mezzo non contano. */
+    expect(diagnostics.gaps).toBe(2);
+    expect(diagnostics.duplicates).toBe(0);
+  });
+
   it('conta le disconnessioni e ricorda l\'ultimo errore', () => {
     diagnostics.noteDisconnect(1000);
     diagnostics.noteDisconnect(2000);

@@ -204,7 +204,9 @@ Quello che si vede, dall'alto in basso:
 La pagina **riprova da sola** quando il collegamento cade — la scheda si
 riavvia, o passa un disturbo — come fanno le cuffie quando le riaccendi: ogni
 mezzo secondo all'inizio, poi sempre più di rado, senza che nessuno prema
-niente. Mentre ci prova la banda
+niente. E non aspetta che sia il computer ad accorgersene: la scheda manda un
+piccolo **battito** ogni 1,2 secondi anche quando il punteggio non cambia, così
+se ne accorge in **tre secondi** invece di una decina. Mentre ci prova la banda
 in alto diventa gialla e lo scrive; **ANNULLA RICONNESSIONE** la ferma, e
 **SCOLLEGA** la spegne (la pagina non riapre mai un collegamento chiuso a mano).
 Nel pannello Diagnostica si legge **quanto è durata l'ultima interruzione**,

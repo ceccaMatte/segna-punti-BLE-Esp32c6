@@ -41,7 +41,16 @@ export class PacketDiagnostics {
 
   /** Quando e' caduto il collegamento, se e' caduto e non e' ancora tornato. */
   private disconnectedAt: number | null = null;
-  /** Quando e' arrivato l'ultimo pacchetto, in millisecondi da epoch. */
+  /** Quanti battiti sono arrivati: la scheda che dice "ci sono" senza novita'. */
+  heartbeats = 0;
+
+  /**
+   * Quando si e' sentita la scheda l'ultima volta, pacchetto o battito che sia.
+   *
+   * E' la misura del contatto, non degli aggiornamenti: con i battiti che
+   * arrivano ogni secondo, un numero grande qui vuol dire che la scheda non
+   * c'e' piu' — ed e' quello che fa scattare la riconnessione.
+   */
   lastUpdate: number | null = null;
 
   /** L'ultimo errore visto, se ce n'e' uno. */
@@ -86,6 +95,18 @@ export class PacketDiagnostics {
     }
 
     this.packets += 1;
+    this.lastUpdate = now;
+  }
+
+  /**
+   * Registra un battito: la scheda c'e', ma non ha niente da dire.
+   *
+   * Non e' un pacchetto e non tocca i numeri di sequenza, i salti e i
+   * duplicati: serve a una cosa sola, e importante, tenere viva la misura di
+   * quando si e' sentita l'ultima volta.
+   */
+  noteHeartbeat(now: number): void {
+    this.heartbeats += 1;
     this.lastUpdate = now;
   }
 

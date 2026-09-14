@@ -71,6 +71,15 @@ export const FLAG_TIE_BREAK = 0x01;
 export const FLAG_FINISHED = 0x02;
 export const FLAG_SERVING_NOI = 0x04;
 
+/**
+ * Il pacchetto non porta niente di nuovo: e' un battito.
+ *
+ * La scheda lo manda ogni tanto anche quando il punteggio non cambia, per far
+ * sapere che c'e'. E' cosi' che la pagina distingue una partita ferma da una
+ * scheda sparita: vedi `liveness.ts`.
+ */
+export const FLAG_HEARTBEAT = 0x08;
+
 /** Vincitore assente. */
 export const WINNER_NONE = 0xff;
 
@@ -83,8 +92,10 @@ export const SIDE_NOI = 1;
 /* -------------------------------------------------------------------------- */
 
 export interface ScoreStatePacket {
-  /** Numero dello snapshot: cresce a ogni pubblicazione. */
+  /** Numero dello snapshot: cresce a ogni cambiamento di stato. */
   sequence: number;
+  /** Vero se e' solo un battito: lo stato e' quello di prima. */
+  heartbeat: boolean;
   tieBreak: boolean;
   finished: boolean;
   /** Chi serve: true se serve NOI. */
@@ -150,6 +161,7 @@ export function decodeScoreState(dv: DataView): ScoreStatePacket {
 
   return {
     sequence: dv.getUint16(4, true),
+    heartbeat: (flags & FLAG_HEARTBEAT) !== 0,
     tieBreak: (flags & FLAG_TIE_BREAK) !== 0,
     finished: (flags & FLAG_FINISHED) !== 0,
     servingNoi: (flags & FLAG_SERVING_NOI) !== 0,

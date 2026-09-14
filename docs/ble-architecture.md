@@ -120,7 +120,7 @@ Tutti i numeri piu' lunghi di un byte viaggiano **dal byte meno significativo**
 |---|---|
 | 0 | versione del protocollo (`1`) |
 | 1 | tipo di messaggio (`1`) |
-| 2 | flag: bit 0 tie-break, bit 1 partita finita, bit 2 serve NOI |
+| 2 | flag: bit 0 tie-break, bit 1 partita finita, bit 2 serve NOI, bit 3 battito |
 | 3 | vincitore: `0` LORO, `1` NOI, `0xFF` nessuno |
 | 4..5 | numero di snapshot |
 | 6 | punti LORO |
@@ -136,6 +136,15 @@ I punti del game sono i valori del motore: `0` = 0, `1` = 15, `2` = 30,
 `3` = 40, `4` = vantaggio. **Durante il tie-break restano a zero** e i punti
 veri sono quelli contati uno per uno in `tb_points`: chi legge deve guardare il
 bit del tie-break e usare l'uno o l'altro campo, come fa la scheda sul display.
+
+Il **bit del battito** merita una riga in piu'. La scheda manda lo stesso stato
+ogni **1,2 secondi** anche quando il punteggio non cambia, con il bit alzato e
+lo stesso numero di sequenza: non e' un aggiornamento, e' la scheda che dice
+"ci sono". Serve alla pagina per distinguere una partita ferma da una scheda
+sparita, e quindi per accorgersi di un riavvio in pochi secondi invece di
+aspettare il tempo di supervisione del Bluetooth. Chi lo riceve non lo conta
+come un pacchetto: `web/src/ble/liveness.ts` e `main/ble_score_service.c`
+portano le due costanti che devono restare d'accordo.
 
 Sedici byte e non uno di piu' per una ragione pratica: la notifica BLE piu'
 piccola che esista porta venti byte di dati, quindi lo stato arriva anche senza
@@ -262,23 +271,31 @@ commissioning*, insieme al piedino.
 ### Caduta del collegamento
 
 La scheda si riavvia — per un reset, per una riflasha, per un disturbo — e il
-collegamento cade da solo. La pagina non aspetta un click: **riprova da sola**,
-subito e poi sempre piu' di rado, mezzo secondo, mezzo, uno, uno, due, due, tre,
-cinque, otto, e poi ogni otto secondi finche' non riesce o finche' qualcuno non
-le dice di smettere.
+collegamento cade da solo. Due cose diverse devono succedere, e la prima e'
+quella che costa: **accorgersene**.
 
-L'inizio fitto non e' un dettaglio: una scheda che si riavvia torna in piedi in
-un paio di secondi, e per prenderla in quel momento bisogna tentare spesso, non
-aspettare. Un tentativo che non riceve risposta viene abbandonato dopo **cinque
-secondi** — altrimenti un `connect()` in sospeso bloccherebbe la scala proprio
-nel momento in cui serve che vada avanti.
+**Accorgersene in tre secondi.** Il collegamento muore senza avvisare, e il
+sistema operativo se ne accorge solo allo scadere del tempo di supervisione del
+Bluetooth: su un computer, misurato, **una decina di secondi**. Per non
+aspettarli, la pagina non si fida del sistema: conta i battiti della scheda (vedi
+il bit del battito qui sopra) e quando ne mancano **due di fila** conclude che la
+scheda non c'e' piu'. A quel punto chiude **a mano** il collegamento morto — un
+`disconnect()` esplicito non aspetta la supervisione — e passa alla seconda
+cosa.
 
-> Il tempo che la pagina non puo' togliere e' quello che ci mette il computer ad
-> **accorgersi** che la scheda non c'e' piu': dopo un riavvio il collegamento
-> muore senza avvisare, e il sistema se ne accorge allo scadere del tempo di
-> supervisione del Bluetooth, che e' di qualche secondo. Da li' in avanti,
-> pero', la strada e' breve: nel pannello Diagnostica si legge quanto e' durata
-> l'ultima interruzione.
+**Riprendere.** Da li' in poi la pagina riprova da sola: mezzo secondo, mezzo,
+uno, uno, due, due, tre, cinque, otto, e poi ogni otto secondi finche' non
+riesce o finche' qualcuno non le dice di smettere. L'inizio fitto non e' un
+dettaglio: una scheda che si riavvia torna in piedi in un paio di secondi, e per
+prenderla in quel momento bisogna tentare spesso, non aspettare. Un tentativo che
+non riceve risposta viene abbandonato dopo **cinque secondi** — altrimenti un
+`connect()` in sospeso bloccherebbe la scala proprio nel momento in cui serve
+che vada avanti.
+
+Il conto finale: **tre secondi** per accorgersene, **mezzo** per il primo
+tentativo, **uno** per ricollegarsi e riconoscersi. Sotto i cinque secondi, che
+era l'obiettivo — e in ogni caso si legge nel pannello Diagnostica, che riporta
+quanto e' durata l'ultima interruzione.
 
 E' lo stesso comportamento di un paio di cuffie: le riaccendi e si ricollegano
 all'ultimo telefono senza che nessuno apra un elenco. Due cose che ne
@@ -372,6 +389,7 @@ web/
 │   │   ├── protocol.ts             UUID, opcode, pacchetti (gemello del firmware)
 │   │   ├── PadelBleClient.ts       collegamento, comandi, notifiche
 │   │   ├── reconnect.ts            come si riprova, quando il collegamento cade
+  │   ├── liveness.ts             il conto dei battiti: "la scheda c'e' ancora?"
 │   │   ├── diagnostics.ts          pacchetti, salti, duplicati, ritardi
 │   │   └── hex.ts                  il token da byte a testo e ritorno
 │   ├── score/ScoreState.ts         il pacchetto diventato tabellone

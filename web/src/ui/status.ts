@@ -135,7 +135,7 @@ export function detailLine(
     return 'In attesa del primo aggiornamento dalla scheda.';
   }
 
-  return `Il punteggio arriva dalla scheda: ultimo aggiornamento ${formatAge(data.ageMs)} fa.`;
+  return `La scheda risponde: ultimo contatto ${formatAge(data.ageMs)} fa.`;
 }
 
 /**

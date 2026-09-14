@@ -459,7 +459,7 @@ void app_main(void)
 
         /* Lo stato della partita si pubblica da qui, ed e' l'unico posto in cui
            il punteggio incontra la radio. */
-        ble_score_service_update(controller_state());
+        ble_score_service_update(controller_state(), dt_ms);
 
         if (commissioning_manager_screen_active()) {
             commissioning_ui_update(commissioning_manager_state(),

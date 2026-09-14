@@ -11,6 +11,7 @@ import {
   CommissioningState,
   ControlOp,
   FLAG_FINISHED,
+  FLAG_HEARTBEAT,
   FLAG_SERVING_NOI,
   FLAG_TIE_BREAK,
   PROTOCOL_VERSION,
@@ -53,6 +54,7 @@ describe('stato della partita', () => {
     );
 
     expect(packet.sequence).toBe(0x1234);
+    expect(packet.heartbeat).toBe(false);
     expect(packet.tieBreak).toBe(true);
     expect(packet.servingNoi).toBe(true);
     expect(packet.finished).toBe(false);
@@ -63,8 +65,35 @@ describe('stato della partita', () => {
     expect(packet.tieBreakPoints).toEqual([6, 7]);
   });
 
-  it('riconosce la partita finita con il suo vincitore', () => {
+  it('riconosce il battito: stesso stato, nessuna novita\'', () => {
     const packet = decodeScoreState(
+      bytes([
+        PROTOCOL_VERSION,
+        1, // SCORE_STATE
+        FLAG_HEARTBEAT | FLAG_SERVING_NOI,
+        WINNER_NONE,
+        7,
+        0, // sequenza: quella di prima, non una nuova
+        0,
+        1, // punti
+        0,
+        0, // game
+        0,
+        0, // set
+        0,
+        0,
+        0,
+        0, // tie-break
+      ]),
+    );
+
+    expect(packet.heartbeat).toBe(true);
+    expect(packet.sequence).toBe(7);
+    expect(packet.servingNoi).toBe(true);
+    expect(packet.points).toEqual([0, 1]);
+  });
+
+  it('riconosce la partita finita con il suo vincitore', () => {    const packet = decodeScoreState(
       bytes([PROTOCOL_VERSION, 1, FLAG_FINISHED, 1, 9, 0, 0, 0, 0, 0, 3, 2, 0, 0, 0, 0]),
     );
 
