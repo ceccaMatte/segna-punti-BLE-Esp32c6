@@ -22,6 +22,63 @@
 static const char *TAG = "ble";
 
 /* -------------------------------------------------------------------------- */
+/* Quanto deve essere reattivo il collegamento                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Quanto il collegamento puo' restare in silenzio prima di essere dichiarato
+ * morto.
+ *
+ * E' il numero che decide quanto ci si mette ad accorgersi che la scheda e'
+ * sparita: se la scheda si riavvia il collegamento muore senza avvisare, e il
+ * computer se ne accorge solo quando questo tempo e' scaduto. Quello che
+ * propone lui e' lungo — misurato, una decina di secondi — e per una scheda che
+ * si riavvia e' tempo perso: qui gliene si chiede uno corto.
+ *
+ * Due secondi con un intervallo di trenta millisecondi vogliono dire
+ * trentatre' pacchetti persi di fila prima di dichiarare morto un collegamento
+ * che sta benissimo: nessun disturbo passeggero arriva a tanto.
+ */
+#define LINK_SUPERVISION_TIMEOUT_MS 2000u
+
+/** Ogni quanto due apparecchi si danno il buongiorno quando non c'e' niente da dire. */
+#define LINK_INTERVAL_MS 30u
+
+/**
+ * Chiede al computer di tenere il collegamento pronto a morire presto.
+ *
+ * La pagina web fa la sua parte — conta i battiti della scheda e chiude da sola
+ * il collegamento quando smettono di arrivare — ma c'e' un pezzo che dipende
+ * solo da questa parte: la velocita' con cui il sistema libera la scheda
+ * vecchia. Finche' non l'ha liberata, ogni tentativo di ricollegarsi fallisce,
+ * e non c'e' niente che la pagina possa fare.
+ *
+ * Chiedere parametri piu' stretti si puo' fare anche da qui: lo standard prevede
+ * che il periferico proponga i suoi, e il computer decide. Se dice di no non si
+ * perde niente: resta il tempo lungo di prima.
+ */
+static void request_fast_link(uint16_t conn_handle)
+{
+    const struct ble_gap_upd_params params = {
+        .itvl_min = BLE_GAP_CONN_ITVL_MS(LINK_INTERVAL_MS),
+        .itvl_max = BLE_GAP_CONN_ITVL_MS(LINK_INTERVAL_MS),
+        .latency = 0u,
+        .supervision_timeout = BLE_GAP_SUPERVISION_TIMEOUT_MS(LINK_SUPERVISION_TIMEOUT_MS),
+        .min_ce_len = 0u,
+        .max_ce_len = 0u,
+    };
+
+    const int rc = ble_gap_update_params(conn_handle, &params);
+
+    if (rc == 0) {
+        ESP_LOGI(TAG, "chiesto un collegamento reattivo (morte dichiarata dopo %u ms)",
+                 (unsigned)LINK_SUPERVISION_TIMEOUT_MS);
+    } else {
+        ESP_LOGW(TAG, "parametri del collegamento non richiesti (%d)", rc);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Gli identificativi, nella forma che vuole NimBLE                           */
 /* -------------------------------------------------------------------------- */
 
@@ -321,8 +378,24 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_status_subscribed = false;
 
         ESP_LOGI(TAG, "connesso");
+
+        /* Si chiede subito un collegamento pronto a morire presto: e' quello
+           che permette al computer di accorgersi in due secondi di un riavvio,
+           invece di dieci. Vedi request_fast_link(). */
+        request_fast_link(event->connect.conn_handle);
+
         if (s_callbacks.on_connected != NULL) {
             s_callbacks.on_connected(s_callbacks.context);
+        }
+        return 0;
+
+    case BLE_GAP_EVENT_CONN_UPDATE:
+        /* L'esito della richiesta fatta appena collegati. */
+        if (event->conn_update.status == 0) {
+            ESP_LOGI(TAG, "collegamento aggiornato come richiesto");
+        } else {
+            ESP_LOGW(TAG, "il computer non ha accettato i parametri proposti (%d)",
+                     event->conn_update.status);
         }
         return 0;
 

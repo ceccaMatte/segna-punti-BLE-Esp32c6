@@ -295,7 +295,26 @@ che vada avanti.
 Il conto finale: **tre secondi** per accorgersene, **mezzo** per il primo
 tentativo, **uno** per ricollegarsi e riconoscersi. Sotto i cinque secondi, che
 era l'obiettivo — e in ogni caso si legge nel pannello Diagnostica, che riporta
-quanto e' durata l'ultima interruzione.
+quanto e' durata l'ultima interruzione, quanti tentativi sono stati fatti e
+quanto e' durato l'ultimo.
+
+**E il computer?** La pagina puo' accorgersi in fretta, ma c'e' un secondo
+effetto che dipende da lui: finche' non ha liberato la scheda vecchia, ogni
+tentativo di ricollegarsi fallisce — e non c'e' niente che la pagina possa fare
+per convincerlo. Anche li' non si aspetta: appena collegata la scheda **chiede**
+un collegamento piu' reattivo, con intervallo di **30 ms** e morte dichiarata
+dopo **2 secondi** invece dei dieci che propone il computer. Nel monitor seriale
+si legge se la richiesta e' stata accettata:
+
+```
+I (xxxxx) ble: connesso
+I (xxxxx) ble: chiesto un collegamento reattivo (morte dichiarata dopo 2000 ms)
+I (xxxxx) ble: collegamento aggiornato come richiesto
+```
+
+Se invece arriva *"il computer non ha accettato i parametri proposti"*, resta il
+tempo lungo di prima e a fare il lavoro resta solo il battito: la pagina se ne
+accorge lo stesso, ma la riconnessione puo' richiedere qualche tentativo in piu'.
 
 E' lo stesso comportamento di un paio di cuffie: le riaccendi e si ricollegano
 all'ultimo telefono senza che nessuno apra un elenco. Due cose che ne

@@ -56,9 +56,11 @@ export interface KnownDevice {
  * puo' restare in sospeso per parecchi secondi. Finche' quella promessa non si
  * conclude la riconnessione non puo' riprovare, e la scala dei tentativi resta
  * ferma dietro a un tentativo che non rispondera' mai. Una scheda che c'e'
- * risponde in meno di un secondo: cinque sono gia' un'attesa generosa.
+ * risponde in meno di un secondo: due secondi e mezzo sono gia' un'attesa
+ * generosa, e sono corti abbastanza da non sprecare la finestra in cui il
+ * computer sta ancora liberando la scheda vecchia.
  */
-export const CONNECT_TIMEOUT_MS = 5000;
+export const CONNECT_TIMEOUT_MS = 2500;
 
 /**
  * `gatt.connect()`, ma con un limite di tempo.

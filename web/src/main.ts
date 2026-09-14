@@ -279,6 +279,8 @@ async function startStreaming(): Promise<void> {
  * c'e' una finestra di scelta aperta, e non ci si mette in mezzo.
  */
 async function attemptReconnect(): Promise<boolean> {
+  const startedAt = Date.now();
+
   if (association === null) {
     /* Senza associazione non c'e' niente da riprendere: si smette, invece di
        provarci ogni quindici secondi per non concludere niente. */
@@ -291,6 +293,8 @@ async function attemptReconnect(): Promise<boolean> {
        mezzo, ma il tentativo successivo resta in programma. */
     return false;
   }
+
+  let ok = false;
 
   try {
     if (!client.hasDevice) {
@@ -309,11 +313,17 @@ async function attemptReconnect(): Promise<boolean> {
 
     await client.connect();
     await afterConnect();
-    return true;
+    ok = true;
   } catch {
     /* Scheda spenta, lontana o ancora in avvio: si riprovera' fra poco. */
-    return false;
+    ok = false;
   }
+
+  /* Quanto e' durato il tentativo finisce nella diagnostica: e' quello che
+     distingue "il computer ha risposto di no" da "e' rimasto in attesa". */
+  diagnostics.noteAttempt(Date.now() - startedAt, ok);
+
+  return ok;
 }
 
 async function connectAndIdentify(device: BluetoothDevice | null): Promise<void> {

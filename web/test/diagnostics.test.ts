@@ -138,6 +138,33 @@ describe('tempi ed errori', () => {
     expect(diagnostics.lastOutageMs).toBe(600);
   });
 
+  it('racconta come e\' andato l\'ultimo tentativo', () => {
+    diagnostics.noteDisconnect(1000);
+    diagnostics.noteAttempt(180, false);
+    diagnostics.noteAttempt(240, false);
+
+    expect(diagnostics.attempts).toBe(2);
+    expect(diagnostics.lastAttemptMs).toBe(240);
+    expect(diagnostics.lastAttemptOk).toBe(false);
+
+    diagnostics.noteAttempt(900, true);
+
+    expect(diagnostics.attempts).toBe(3);
+    expect(diagnostics.lastAttemptMs).toBe(900);
+    expect(diagnostics.lastAttemptOk).toBe(true);
+  });
+
+  it('collegato, il conto dei tentativi riparte da zero', () => {
+    diagnostics.noteDisconnect(1000);
+    diagnostics.noteAttempt(500, false);
+    diagnostics.noteAttempt(900, true);
+    diagnostics.noteReconnect(2500);
+
+    /* I tentativi valgono per l'interruzione appena chiusa. */
+    expect(diagnostics.attempts).toBe(0);
+    expect(diagnostics.lastAttemptOk).toBe(true);
+  });
+
   it('azzerando si dimentica tutto tranne le disconnessioni', () => {
     diagnostics.notePacket(10, 1);
     diagnostics.noteDisconnect(1500);

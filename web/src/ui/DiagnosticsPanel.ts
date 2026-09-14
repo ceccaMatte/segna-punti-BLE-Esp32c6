@@ -21,6 +21,16 @@ function ageText(ageMs: number | null): string {
   return `${(ageMs / 1000).toFixed(1)} s`;
 }
 
+/** L'ultimo tentativo di riconnessione: quanto e' durato e com'e' finito. */
+function attemptText(diagnostics: PacketDiagnostics): string {
+  if (diagnostics.lastAttemptMs === null) {
+    return '—';
+  }
+
+  const esito = diagnostics.lastAttemptOk ? 'riuscito' : 'fallito';
+  return `${ageText(diagnostics.lastAttemptMs)}, ${esito}`;
+}
+
 export class DiagnosticsPanel {
   constructor(private readonly root: HTMLElement) {}
 
@@ -35,6 +45,8 @@ export class DiagnosticsPanel {
         ['Duplicati', String(diagnostics.duplicates)],
         ['Disconnessioni', String(diagnostics.disconnects)],
         ['Riconnessioni', String(diagnostics.reconnects)],
+        ['Tentativi di riconnessione', String(diagnostics.attempts)],
+        ['Ultimo tentativo', attemptText(diagnostics)],
         ['Ultima interruzione', ageText(diagnostics.lastOutageMs)],
         ['Battiti ricevuti', String(diagnostics.heartbeats)],
         [

@@ -210,7 +210,10 @@ se ne accorge in **tre secondi** invece di una decina. Mentre ci prova la banda
 in alto diventa gialla e lo scrive; **ANNULLA RICONNESSIONE** la ferma, e
 **SCOLLEGA** la spegne (la pagina non riapre mai un collegamento chiuso a mano).
 Nel pannello Diagnostica si legge **quanto è durata l'ultima interruzione**,
-che è il modo di sapere se la riconnessione è veloce come si vorrebbe.
+che è il modo di sapere se la riconnessione è veloce come si vorrebbe. La scheda
+inoltre, appena collegata, **chiede un collegamento più reattivo**: intervallo
+di 30 ms e morte dichiarata dopo 2 secondi invece dei dieci che propone il
+computer, così anche il sistema si accorge prima che è sparita.
 Dopo un **ricaricamento della pagina**, invece, riprendere la scheda richiede un
 click dove il browser non ha `getDevices()`: è una regola di Web Bluetooth, e la
 pagina lo dice invece di provarci per sempre.

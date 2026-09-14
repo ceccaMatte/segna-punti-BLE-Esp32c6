@@ -30,6 +30,22 @@ export class PacketDiagnostics {
   /** Quante volte il collegamento e' tornato dopo essere caduto. */
   reconnects = 0;
 
+  /** Tentativi di riconnessione fatti da quando il collegamento e' tornato. */
+  attempts = 0;
+
+  /**
+   * Quanto e' durato l'ultimo tentativo di riconnessione, in millisecondi.
+   *
+   * La durata dice piu' cose del numero: un tentativo che torna subito vuol
+   * dire che il computer ha risposto di no, uno che ci mette cinque secondi
+   * vuol dire che e' rimasto in attesa. Sono due problemi diversi, e si
+   * aggiustano in due modi diversi.
+   */
+  lastAttemptMs: number | null = null;
+
+  /** Vero se l'ultimo tentativo di riconnessione e' riuscito. */
+  lastAttemptOk = false;
+
   /**
    * Quanto e' durata l'ultima interruzione, in millisecondi.
    *
@@ -115,6 +131,13 @@ export class PacketDiagnostics {
     this.disconnectedAt = now;
   }
 
+  /** Registra un tentativo di riconnessione e quanto e' durato. */
+  noteAttempt(durationMs: number, ok: boolean): void {
+    this.attempts += 1;
+    this.lastAttemptMs = durationMs;
+    this.lastAttemptOk = ok;
+  }
+
   /**
    * Registra che il collegamento e' tornato.
    *
@@ -130,6 +153,10 @@ export class PacketDiagnostics {
     this.disconnectedAt = null;
     this.reconnects += 1;
     this.lastOutageMs = outage;
+
+    /* Il conto dei tentativi vale per l'interruzione appena chiusa: se ne
+       ricomincia a contare dalla prossima. */
+    this.attempts = 0;
 
     return outage;
   }
