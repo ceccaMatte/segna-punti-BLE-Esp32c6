@@ -24,6 +24,20 @@ menu "Segnapunti padel"
             Va lasciata spenta durante il gioco: la figura resta finche' non
             viene ridisegnata la schermata.
 
+    comment "LED RGB"
+
+    config PADEL_LED_BRIGHTNESS
+        int "Luminosita' del LED (millesimi)"
+        default 400
+        range 0 1000
+        help
+            Quanto e' luminoso il LED di bordo. Il limite vale per tutti i
+            colori, spettacolo di luci compreso, cosi' il lampo di un punto non
+            e' mai piu' forte del colore che resta acceso alla fine.
+
+            Un WS2812 tenuto al massimo acceca: a mezzo metro e' fastidioso da
+            guardare e di sera illumina la stanza. A zero il LED resta spento.
+
     comment "Pulsante"
 
     config PADEL_BUTTON_DEBOUNCE_MS

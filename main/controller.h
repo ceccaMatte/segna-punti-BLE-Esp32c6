@@ -36,6 +36,22 @@ typedef enum {
     MATCH_PHASE_FINISHED
 } match_phase_t;
 
+/**
+ * Cosa e' appena successo, per chi deve reagire senza leggere lo stato.
+ *
+ * Serve a chi sta fuori dal motore e deve fare qualcosa *quando* succede, non
+ * raccontare com'e' adesso: il LED, per esempio, deve sapere che e' arrivato un
+ * punto per fare lo spettacolo, e non lo puo' dedurre dal punteggio perche' due
+ * punti diversi possono portare allo stesso punteggio mostrato.
+ */
+typedef enum {
+    CTRL_ACTION_NONE = 0,
+    CTRL_ACTION_POINT_NOI,  /**< punto a NOI                        */
+    CTRL_ACTION_POINT_LORO, /**< punto a LORO                       */
+    CTRL_ACTION_UNDO,       /**< un'azione annullata                */
+    CTRL_ACTION_RESET       /**< partita azzerata, a mano o da sola */
+} controller_action_t;
+
 /** Inizializza il motore e la fase. */
 void controller_init(team_t first_server);
 
@@ -58,9 +74,20 @@ void controller_handle_event(btn_event_t evt);
  * @brief Fa avanzare il timer della schermata finale.
  *
  * Fuori da FINISHED non fa nulla. Al raggiungimento della durata esegue il
- * reset completo e torna in PLAYING.
+ * reset completo e torna in PLAYING: quel reset automatico viene riportato da
+ * ::controller_take_action come CTRL_ACTION_RESET, perche' per chi guarda non
+ * fa differenza se la partita e' stata azzerata a mano o da sola.
  */
 void controller_tick(uint32_t dt_ms);
+
+/**
+ * @brief Ritira l'ultima azione e la dimentica.
+ *
+ * E' un prelievo, non una lettura: la seconda chiamata senza eventi in mezzo
+ * restituisce NONE. Cosi' chi reagisce non rischia di eseguire due volte la
+ * stessa azione per averla chiesta due volte.
+ */
+controller_action_t controller_take_action(void);
 
 /** Vista in sola lettura dello stato della partita. */
 const MatchState *controller_state(void);

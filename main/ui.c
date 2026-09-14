@@ -27,6 +27,7 @@
 #include "dirty.h"
 #include "font.h"
 #include "gfx.h"
+#include "palette.h"
 
 /* -------------------------------------------------------------------------- */
 /* Colori                                                                     */
@@ -41,10 +42,10 @@
 #define COL_DIM         GFX_RGB(84, 96, 112)
 #define COL_TB          GFX_RGB(250, 190, 60)
 #define COL_DASH        GFX_RGB(120, 134, 150)
-
-#define COL_LORO        GFX_RGB(58, 216, 138)
-#define COL_NOI         GFX_RGB(74, 188, 252)
 #define COL_DIVIDER     GFX_RGB(38, 48, 62)
+
+/* I due colori delle squadre stanno in palette.h, perche' gli stessi valori
+   finiscono anche sul LED: vedi il commento in testa a quel file. */
 
 /* -------------------------------------------------------------------------- */
 /* Stato interno                                                              */
@@ -65,7 +66,7 @@ static unsigned long s_last_pixels;
 /** Colore della squadra. */
 static uint16_t team_accent(team_t team)
 {
-    return (team == TEAM_US) ? COL_NOI : COL_LORO;
+    return palette_screen(team);
 }
 
 /** Nome mostrato sul pannello. */
@@ -225,7 +226,7 @@ static void draw_card_section(int section_y, const char *label, uint8_t loro_val
     const int x0 = UI_CENTER_CX - total / 2;
     const int value_y = section_y + UI_CARD_VALUE_DY;
 
-    gfx_text(&s_g, nums, left, x0, value_y, COL_LORO);
+    gfx_text(&s_g, nums, left, x0, value_y, palette_screen(TEAM_THEM));
 
     gfx_fill_rect_rounded(&s_g, x0 + w_left + UI_CARD_DASH_GAP,
                           value_y + ((int)nums->cell_height - UI_CARD_DASH_H) / 2,
@@ -233,7 +234,7 @@ static void draw_card_section(int section_y, const char *label, uint8_t loro_val
 
     gfx_text(&s_g, nums, right,
              x0 + w_left + UI_CARD_DASH_GAP + UI_CARD_DASH_W + UI_CARD_DASH_GAP,
-             value_y, COL_NOI);
+             value_y, palette_screen(TEAM_US));
 }
 
 /**
@@ -397,6 +398,14 @@ void ui_init(void)
 
 void ui_invalidate(void)
 {
+    /*
+     * Chi ha scritto sul pannello ha rovinato anche l'intestazione, la riga di
+     * separazione e la pallina, che non appartengono a nessuna zona e non
+     * verrebbero riscritte: si rifanno qui.
+     */
+    if (s_drawn) {
+        draw_static();
+    }
     s_drawn = false;
 }
 
@@ -414,6 +423,22 @@ void ui_update(const ui_view_t *view)
 {
     if (!display_ready() || view == NULL) {
         return;
+    }
+
+    /*
+     * La schermata del vincitore copre il pannello intero: quando se ne va si
+     * torna al primo disegno, intestazione compresa.
+     *
+     * Ridisegnare le sole zone non basta, ed e' un difetto che si vede subito:
+     * il titolo, la riga di separazione e la pallina non appartengono a nessuna
+     * zona e si disegnano una volta sola all'avvio, quindi la scritta PADEL
+     * SCORE resterebbe cancellata; e negli spazi fra una zona e l'altra
+     * resterebbero i pezzi della schermata precedente, come una colonna di
+     * frammenti fra i due pannelli.
+     */
+    if (s_drawn && s_shown.overlay && !view->overlay) {
+        draw_static();
+        s_drawn = false;
     }
 
     /* Prima volta dopo l'avvio, o dopo che qualcun altro ha scritto sullo

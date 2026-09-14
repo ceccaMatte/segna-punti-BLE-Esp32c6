@@ -47,6 +47,7 @@ $sources = @(
     (Join-Path $SrcDir  'gfx.c'),
     (Join-Path $SrcDir  'dirty.c'),
     (Join-Path $SrcDir  'ui_view.c'),
+    (Join-Path $SrcDir  'led_anim.c'),
     (Join-Path $TestDir 'test_util.c'),
     (Join-Path $TestDir 'test_main.c'),
     (Join-Path $TestDir 'test_match.c'),
@@ -56,7 +57,8 @@ $sources = @(
     (Join-Path $TestDir 'test_gfx.c'),
     (Join-Path $TestDir 'test_dirty.c'),
     (Join-Path $TestDir 'test_ui_view.c'),
-    (Join-Path $TestDir 'test_layout.c')
+    (Join-Path $TestDir 'test_layout.c'),
+    (Join-Path $TestDir 'test_led_anim.c')
 )
 
 foreach ($source in $sources) {

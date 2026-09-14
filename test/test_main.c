@@ -20,6 +20,7 @@ int main(void)
     test_dirty_all();
     test_ui_view_all();
     test_layout_all();
+    test_led_anim_all();
 
     return test_summary();
 }

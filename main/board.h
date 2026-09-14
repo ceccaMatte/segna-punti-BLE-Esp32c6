@@ -86,7 +86,12 @@
 /* LED RGB della scheda                                                       */
 /* -------------------------------------------------------------------------- */
 
-/* La scheda monta un WS2812B su GPIO8. Non viene usato dal segnapunti: e'
-   elencato qui solo per completezza, e per ricordarsi che GPIO8 deve restare
-   alto al momento dell'avvio per non entrare in modalita' download. */
+/* La scheda monta un WS2812B su GPIO8, solo, senza altro sulla stessa linea.
+   E' lo stesso piedino del progetto di esempio del produttore, quindi non ci
+   sono dubbi su quale sia.
+
+   Attenzione: GPIO8 e' uno dei piedini che il chip legge all'accensione per
+   decidere come partire. Il LED ha l'ingresso ad alta impedenza e non lo
+   disturba, ma il segnapunti lo configura solo a chip avviato, dopo lo schermo:
+   prima non servirebbe a niente e toccarlo non porta nulla di buono. */
 #define BOARD_RGB_GPIO      8

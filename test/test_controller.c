@@ -194,6 +194,89 @@ static void test_timeout_reset(void)
 
 /* -------------------------------------------------------------------------- */
 
+static void test_azione_riportata(void)
+{
+    const char *name = "l'azione compiuta viene riportata, e una volta sola";
+    test_begin(name);
+
+    controller_init(TEAM_US);
+
+    /* A partita ferma non e' successo niente. */
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_NONE);
+
+    controller_handle_event(BTN_EVT_SINGLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_POINT_NOI);
+
+    /* E' un prelievo, non una lettura: la seconda volta non c'e' piu' niente. */
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_NONE);
+
+    controller_handle_event(BTN_EVT_DOUBLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_POINT_LORO);
+
+    controller_handle_event(BTN_EVT_TRIPLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_UNDO);
+
+    controller_handle_event(BTN_EVT_LONG);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_RESET);
+
+    /* Un annullamento senza niente da annullare non e' un'azione: chi sta
+       fuori non deve credere che sia successo qualcosa. */
+    controller_handle_event(BTN_EVT_TRIPLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_NONE);
+
+    test_end(name);
+}
+
+static void test_azione_in_finished(void)
+{
+    const char *name = "in FINISHED i click non sono azioni, l'annullamento si'";
+    test_begin(name);
+
+    controller_init(TEAM_US);
+    finish_match();
+
+    /* La palla che ha chiuso il match e' un punto come gli altri. */
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_POINT_NOI);
+
+    controller_handle_event(BTN_EVT_SINGLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_NONE);
+
+    controller_handle_event(BTN_EVT_DOUBLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_NONE);
+
+    /* Tre click annullano anche la palla che ha chiuso il match. */
+    controller_handle_event(BTN_EVT_TRIPLE);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_UNDO);
+    CHECK(!controller_state()->finished);
+
+    test_end(name);
+}
+
+static void test_reset_automatico_e_un_azione(void)
+{
+    const char *name = "il reset automatico si presenta come un azzeramento";
+    test_begin(name);
+
+    controller_init(TEAM_US);
+    finish_match();
+    (void)controller_take_action();   /* la palla che ha chiuso il match */
+
+    CHECK_EQ(controller_phase(), MATCH_PHASE_FINISHED);
+
+    controller_tick(CONTROLLER_FINISHED_SCREEN_MS);
+
+    CHECK_EQ(controller_phase(), MATCH_PHASE_PLAYING);
+
+    /* Per chi guarda non fa differenza se la partita e' stata azzerata a mano
+       o da sola. */
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_RESET);
+    CHECK_EQ(controller_take_action(), CTRL_ACTION_NONE);
+
+    test_end(name);
+}
+
+/* -------------------------------------------------------------------------- */
+
 void test_controller_all(void)
 {
     printf("Controller di fase\n");
@@ -208,6 +291,9 @@ void test_controller_all(void)
     test_undo_in_finished();
     test_reset_in_finished();
     test_timeout_reset();
+    test_azione_riportata();
+    test_azione_in_finished();
+    test_reset_automatico_e_un_azione();
 
     printf("\n");
 }

@@ -16,6 +16,9 @@ static uint32_t s_finished_ms;
 /** Durata della schermata del vincitore prima del reset automatico. */
 static uint32_t s_finished_duration_ms = CONTROLLER_FINISHED_SCREEN_MS;
 
+/** Ultima azione compiuta, in attesa di essere ritirata. */
+static controller_action_t s_action = CTRL_ACTION_NONE;
+
 /**
  * Riallinea la fase allo stato del motore.
  *
@@ -39,6 +42,7 @@ void controller_init(team_t first_server)
     match_init(first_server);
     s_phase = MATCH_PHASE_PLAYING;
     s_finished_ms = 0;
+    s_action = CTRL_ACTION_NONE;
 }
 
 void controller_set_finished_ms(uint32_t ms)
@@ -48,29 +52,36 @@ void controller_set_finished_ms(uint32_t ms)
 
 void controller_handle_event(btn_event_t evt)
 {
+    s_action = CTRL_ACTION_NONE;
+
     switch (evt) {
     case BTN_EVT_SINGLE:
         /* in FINISHED i click singoli e doppi sono ignorati */
         if (s_phase == MATCH_PHASE_PLAYING) {
             match_score(TEAM_US);
+            s_action = CTRL_ACTION_POINT_NOI;
         }
         break;
 
     case BTN_EVT_DOUBLE:
         if (s_phase == MATCH_PHASE_PLAYING) {
             match_score(TEAM_THEM);
+            s_action = CTRL_ACTION_POINT_LORO;
         }
         break;
 
     case BTN_EVT_TRIPLE:
         /* valido in entrambe le fasi: annulla anche la palla che ha chiuso
            il match, riportando la partita in corso */
-        match_undo();
+        if (match_undo()) {
+            s_action = CTRL_ACTION_UNDO;
+        }
         break;
 
     case BTN_EVT_LONG:
         /* reset immediato, anche dalla schermata del vincitore */
         match_reset();
+        s_action = CTRL_ACTION_RESET;
         break;
 
     case BTN_EVT_NONE:
@@ -79,6 +90,13 @@ void controller_handle_event(btn_event_t evt)
     }
 
     controller_sync_phase();
+}
+
+controller_action_t controller_take_action(void)
+{
+    const controller_action_t action = s_action;
+    s_action = CTRL_ACTION_NONE;
+    return action;
 }
 
 void controller_tick(uint32_t dt_ms)
@@ -91,6 +109,9 @@ void controller_tick(uint32_t dt_ms)
 
     if (s_finished_ms >= s_finished_duration_ms) {
         match_reset();
+        /* Per chi guarda da fuori non fa differenza se la partita e' stata
+           azzerata a mano o da sola: e' lo stesso azzeramento. */
+        s_action = CTRL_ACTION_RESET;
         controller_sync_phase();
     }
 }

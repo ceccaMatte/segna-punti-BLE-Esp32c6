@@ -23,6 +23,12 @@ scarto, e sul 6-6 si va al tie-break, che si chiude a 7 con due di scarto e
 senza limite. A partita finita appare la schermata del vincitore, che resta
 quattro secondi e poi la partita ricomincia da sola.
 
+Il **LED RGB di bordo** dice chi ha segnato l'ultimo punto: a ogni punto fa uno
+spettacolo di luci e poi resta acceso del colore della squadra che l'ha vinto,
+verde per LORO e azzurro per NOI. Annullando non c'è nessuno spettacolo: il
+colore torna semplicemente indietro, perché chi si è corretto non deve vedersi
+una festa. La luminosità si regola da menuconfig, e a zero il LED resta spento.
+
 ---
 
 ## Cosa rende questo progetto diverso dal solito
@@ -50,23 +56,37 @@ pannello, o le regole, si tocca un file solo.
 ## Come si costruisce la schermata
 
 ```
-y   0 .. 23    PADEL SCORE                            [TB]
-y  24 .. 25    ────────────────────────────────────────────
-y  28 .. 248        LORO                NOI
+y   3 .. 13    PADEL SCORE                        [TB]
+y  17 .. 33    ────────────────── ● ──────────────────
+
+y  38 .. 189        LORO                 NOI
                      •                   ○
                     40                   30
-y 252 .. 285     1      GAME      2
-y 286 .. 319     0      SET       1
+
+y 196 .. 313  ┌──────────────────────────────────┐
+              │           GAME   0 - 0           │
+              │   ──────────────────────────     │
+              │           SET    0 - 0           │
+              └──────────────────────────────────┘
 ```
 
-I due pannelli sono larghi 82 pixel: LORO in verde acqua a sinistra, NOI in
-azzurro a destra. Il pallino sopra il punteggio dice chi serve. Il distintivo
-`TB` in alto a destra compare solo durante il tie-break, quando al posto di
-0 / 15 / 30 / 40 compaiono i punti contati uno per uno.
+I due pannelli sono larghi 79 pixel e hanno un alone del colore della squadra:
+LORO in verde acqua a sinistra, NOI in azzurro a destra. Il pallino sopra il
+punteggio dice chi serve. Il distintivo `TB` in alto a destra compare solo
+durante il tie-break, quando al posto di 0 / 15 / 30 / 40 compaiono i punti
+contati uno per uno. La pallina sulla riga di separazione è il segno della
+scheda, non un'informazione: è lì perché una riga sola sembrava un taglio.
+
+I game e i set stanno in **una scheda sola**, divisa da una riga sottile: due
+schede separate con un margine in mezzo sprecavano spazio senza guadagnare
+niente.
 
 La cifra grande viene scelta in base a **quanto è larga davvero** la stringa,
 non a quanti caratteri ha: `40`, `AD` e `103` hanno lunghezze simili ma
 larghezze molto diverse, e ciascuno viene dimensionato per quello che occupa.
+Il carattere più grande non si usa mai qui — servirebbe solo a far sembrare
+schiacciati i numeri contro la cornice — e resta alla schermata del vincitore,
+dove la cifra è una sola.
 
 ---
 
@@ -74,8 +94,12 @@ larghezze molto diverse, e ciascuno viene dimensionato per quello che occupa.
 
 ```
 GPIO9 ──→ button.c ──→ controller.c ──→ match.c ──→ history.c
-                                            │
-                       ui_view.c ──→ ui.c ──→ gfx.c ──→ display.c ──→ ST7789
+                          │                 │
+                          │                 └──→ ui_view.c ──→ ui.c ──→ gfx.c
+                          │                                     │
+                          └──→ led_anim.c ──→ rgb_led.c         └──→ display.c
+                                    │                │                    │
+                                    └────────────────┴────────────────────┴──→ ST7789 e LED RGB
 ```
 
 Un solo senso di marcia. Nessuno risale la catena.
@@ -90,12 +114,17 @@ Un solo senso di marcia. Nessuno risale la catena.
 | `gfx` | forme e testo su un buffer di pixel | no |
 | `dirty` | unisce le zone da ridisegnare | no |
 | `ui_view` | cosa va mostrato e cosa è cambiato | no |
+| `palette` | i colori delle due squadre, per schermo e LED | no |
+| `led_anim` | lo spettacolo di luci e che colore lasciare acceso | no |
 | `ui` | come si disegna la schermata | solo per la larghezza |
 | `display` | bus SPI, controller ST7789, retroilluminazione | sì |
+| `rgb_led` | il LED di bordo, WS2812B sul periferico RMT | sì |
 | `main` | ciclo principale | sì |
 
-I primi otto si compilano anche su PC. È questa separazione che rende
-verificabile quello che altrimenti si vedrebbe solo guardando lo schermo.
+Gli undici moduli senza ESP32 si compilano anche su PC. È questa separazione
+che rende verificabile quello che altrimenti si vedrebbe solo guardando lo
+schermo: perfino lo spettacolo di luci, che sul PC si guarda istante per
+istante invece di aspettare che capiti il punto giusto.
 
 ---
 
@@ -152,6 +181,7 @@ Tutto si configura da `idf.py menuconfig` → **Segnapunti padel**.
 | Voce | Predefinito | A cosa serve |
 |---|---|---|
 | Luminosità | 500 ‰ | metà potenza: il produttore avverte che il massimo lascia aloni permanenti |
+| Luminosità LED | 400 ‰ | quanto è luminoso il LED di bordo, spettacolo compreso; a 0 resta spento |
 | Rimbalzo ignorato | 25 ms | quanto deve restare stabile il piedino prima di essere creduto |
 | Finestra multi-click | 400 ms | quanto si aspetta per capire se arriva un altro click |
 | Pressione lunga | 4000 ms | durata per l'azzeramento |
@@ -194,6 +224,19 @@ Guarda le barre e cambia **una sola riga** in fondo a `main/display.c`:
 
 Sono le uniche quattro incognite che non si possono dedurre dai documenti: il
 resto è verificato.
+
+### Il LED non si accende
+
+Il monitor seriale lo dice all'avvio. Cerca questa riga:
+
+```
+I (238) led: LED RGB acceso su GPIO8
+```
+
+Se c'è, il periferico è partito e il problema è la luminosità impostata a zero.
+Se non c'è, la riga sopra spiega perché: il canale RMT non era disponibile o il
+piedino non si è lasciato configurare, e in entrambi i casi il segnapunti va
+avanti lo stesso, senza LED.
 
 ### Lo schermo resta nero
 

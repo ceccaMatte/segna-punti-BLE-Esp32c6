@@ -120,12 +120,15 @@ nell'avviso sul calore qui sopra.
 | Dato WS2812B | **GPIO8** |
 
 Un solo LED, ordine colori RGB. Nel core Arduino si pilota con `rgbLedWrite()`;
-in ESP-IDF si usa il driver RMT.
+in ESP-IDF si usa il periferico RMT: il progetto scrive i ventiquattro bit del
+colore nella memoria del canale e manda la trasmissione, senza librerie
+esterne.
 
-> ⚠️ Sulla ESP32-C6 GPIO8 è anche un pin di strapping: deve restare **alto**
-> durante il reset perché il chip entri in download mode in modo affidabile
-> insieme a GPIO9. Il LED non interferisce perché non viene mai pilotato da
-> questo progetto.
+> ⚠️ Sulla ESP32-C6 GPIO8 è anche un pin di strapping e deve restare **alto**
+> durante il reset. L'ingresso del WS2812B è ad alta impedenza, quindi non lo
+disturba; quello che non si deve fare è configurare il piedino *prima* che il
+chip abbia finito di avviarsi. Il progetto lo prepara dopo lo schermo, a partenza
+avvenuta.
 
 ---
 

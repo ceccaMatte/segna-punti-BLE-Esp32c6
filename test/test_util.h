@@ -62,3 +62,4 @@ void test_gfx_all(void);
 void test_dirty_all(void);
 void test_ui_view_all(void);
 void test_layout_all(void);
+void test_led_anim_all(void);

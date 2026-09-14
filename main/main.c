@@ -17,6 +17,11 @@
  * tutta la logica sul computer, senza scheda collegata, con
  * ``test\run_tests.ps1``.
  *
+ * Il LED di bordo dice chi ha segnato l'ultimo punto: fa uno spettacolo di luci
+ * a ogni punto e poi resta acceso del colore della squadra. Un annullamento
+ * non fa spettacolo, si limita a riportare il colore indietro: chi si e'
+ * corretto non deve vedersi una festa.
+ *
  * Il ciclo principale gira ogni 5 millisecondi. Non e' una necessita' del
  * gioco: serve al riconoscimento dei click, che deve distinguere uno, due e tre
  * click all'interno di una finestra di quattrocento millisecondi.
@@ -43,7 +48,9 @@
 #include "button.h"
 #include "controller.h"
 #include "display.h"
+#include "led_anim.h"
 #include "match.h"
+#include "rgb_led.h"
 #include "ui.h"
 #include "ui_view.h"
 
@@ -161,6 +168,8 @@ static void print_banner(void)
              esp_get_idf_version());
     ESP_LOGI(TAG, "  schermo    ST7789 %dx%d, margine X %d, SPI %d MHz",
              LCD_H_RES, LCD_V_RES, LCD_X_GAP, LCD_SPI_CLOCK_HZ / 1000000);
+    ESP_LOGI(TAG, "  LED RGB    GPIO%d, luminosita' %d%%",
+             BOARD_RGB_GPIO, CONFIG_PADEL_LED_BRIGHTNESS / 10);
     ESP_LOGI(TAG, "  pulsante   GPIO%d, attivo basso", BOARD_BUTTON_GPIO);
     ESP_LOGI(TAG, "  gesti      1 click NOI | 2 click LORO | 3 click annulla");
     ESP_LOGI(TAG, "             4 click niente | %" PRIu32 " ms azzera",
@@ -228,6 +237,20 @@ void app_main(void)
 
     ui_init();
 
+    /*
+     * Il LED si prepara dopo lo schermo, a chip gia' avviato.
+     *
+     * Il suo piedino e' uno di quelli che il chip legge all'accensione per
+     * decidere come partire, quindi non va toccato prima. Se non parte si
+     * prosegue come per lo schermo: il segnapunti funziona anche senza LED.
+     */
+    const esp_err_t led_error = rgb_led_init(BOARD_RGB_GPIO);
+    if (led_error != ESP_OK) {
+        ESP_LOGE(TAG, "LED non disponibile (%s): si prosegue senza",
+                 esp_err_to_name(led_error));
+    }
+    led_anim_init();
+
     controller_init(FIRST_SERVER);
 
     button_t button;
@@ -247,6 +270,10 @@ void app_main(void)
         const int64_t now_us = esp_timer_get_time();
         int64_t elapsed_us = now_us - last_us;
         last_us = now_us;
+
+        /* Il LED ragiona in millisecondi: e' la stessa base di tempo del
+           pulsante, ma senza accumuli, cosi' un giro lento non la sposta. */
+        const uint32_t now_ms = (uint32_t)(now_us / 1000);
 
         /* Il tempo si misura davvero invece di darlo per scontato: se il ciclo
            si dilunga, i contatori interni devono saperlo, altrimenti la
@@ -277,6 +304,39 @@ void app_main(void)
         /* Il tempo che passa nella schermata del vincitore e' compito del
            controller, non del disegno: qui ci si limita a farglielo sapere. */
         controller_tick(dt_ms);
+
+        /*
+         * Il LED non guarda lo stato della partita, reagisce a quello che e'
+         * appena successo: un punto fa partire lo spettacolo, un annullamento
+         * riallinea il colore senza spettacolo, l'azzeramento spegne.
+         *
+         * Ci si aspetta che il colore sia cambiato: durante lo spettacolo
+         * cambia a ogni giro, quando e' fermo non si manda niente al LED.
+         */
+        switch (controller_take_action()) {
+        case CTRL_ACTION_POINT_NOI:
+            led_anim_point(TEAM_US, now_ms);
+            break;
+        case CTRL_ACTION_POINT_LORO:
+            led_anim_point(TEAM_THEM, now_ms);
+            break;
+        case CTRL_ACTION_UNDO:
+            led_anim_undo();
+            break;
+        case CTRL_ACTION_RESET:
+            led_anim_reset();
+            break;
+        case CTRL_ACTION_NONE:
+        default:
+            break;
+        }
+
+        if (rgb_led_ready()) {
+            led_rgb_t colour;
+            if (led_anim_update(now_ms, &colour)) {
+                rgb_led_set(&colour);
+            }
+        }
 
         ui_view_build(controller_state(), &view);
         ui_update(&view);
