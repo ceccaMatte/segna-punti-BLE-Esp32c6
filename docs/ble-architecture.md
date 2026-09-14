@@ -221,6 +221,11 @@ Le regole, in breve:
   collegamento, chi torna deve farsi riconoscere di nuovo.
 - L'avviso a video (SUCCESS o TIMEOUT) resta **due secondi**, poi si torna al
   punteggio. Scaduta la finestra la scheda resta non associata, com'era prima.
+- Mentre la finestra e' aperta il display lo dice a modo suo: il titolo
+  `COMMISSIONING` **lampeggia di blu** e il bordo del pannello e' blu. Chi passa
+  davanti alla scheda capisce in mezzo secondo che non e' la schermata del
+  punteggio, senza fermarsi a leggere. Con l'esito in mano il lampeggio smette:
+  da li' in poi c'e' qualcosa da leggere, non da aspettare.
 
 Le durate si cambiano da `menuconfig` → *Segnapunti padel* → *Bluetooth e
 commissioning*, insieme al piedino.
@@ -329,13 +334,32 @@ web/
 │   │   └── hex.ts                  il token da byte a testo e ritorno
 │   ├── score/ScoreState.ts         il pacchetto diventato tabellone
 │   ├── storage/CommissioningStorage.ts   l'associazione nel browser
-│   └── ui/                         i tre pannelli
+│   └── ui/
+│       ├── status.ts               "sto vedendo la scheda?", senza pagina web
+│       ├── StatusBand.ts           la banda in alto, sempre visibile
+│       ├── ConnectionPanel.ts      il pannello del collegamento e delle schede
+│       ├── ScoreboardPanel.ts      il tabellone
+│       ├── DiagnosticsPanel.ts     pacchetti, salti, duplicati, ritardi
+│       └── dom.ts                  gli aiuti per costruire la pagina
 └── test/                           prove dei moduli puri
 ```
 
 `PadelBleClient` non sa niente di schermate, `ScoreState` non sa niente di
 Bluetooth, i pannelli non prendono decisioni. E' la stessa separazione del
 firmware, dall'altra parte del filo.
+
+La domanda che la pagina deve risolvere prima di tutte le altre e' **"sto
+vedendo la scheda?"**, e la risposta sta in una banda in alto che non sparisce
+mai: pallino colorato, una riga grossa e una riga che dice cosa fare adesso o da
+quanto non arriva niente. La stessa riga compare anche nel pannello del
+collegamento, e viene dallo stesso posto — `status.ts` — perche' due schermate
+che rispondono con parole proprie finiscono prima o poi per contraddirsi.
+
+Sotto c'e' l'elenco delle schede che questa pagina ha il permesso di rivedere,
+con l'identificativo di ciascuna e l'etichetta di quella associata e di quella
+collegata in quel momento. Non e' una scansione: Web Bluetooth non lascia
+elencare quello che passa li' intorno, e dove `getDevices()` non c'e' la pagina
+lo dice invece di mostrare un elenco vuoto.
 
 ---
 

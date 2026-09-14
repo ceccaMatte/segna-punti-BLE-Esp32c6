@@ -189,6 +189,18 @@ Servono **Chrome o Edge su computer**, il **Bluetooth acceso** e una pagina
 servita da `localhost` oppure in HTTPS: Web Bluetooth non funziona altrove, ed è
 una regola del browser, non una scelta di questo progetto.
 
+Quello che si vede, dall'alto in basso:
+
+- una **banda di stato** che non sparisce mai: pallino colorato, una riga grossa
+  («COLLEGATA a PADEL_SCORE_EE26», «NON COLLEGATA», «Collegamento in corso…») e
+  una riga che dice da quanto non arriva niente;
+- il pannello **Collegamento**, con i dati della scheda (nome, nome breve,
+  firmware, associazione), i pulsanti e l'elenco delle **schede che questa
+  pagina vede**, con l'identificativo di ciascuna;
+- il pannello **Partita**, che è il tabellone: quando i dati sono vecchi resta
+  in grigio, per non far credere che sia ancora vivo;
+- il pannello **Diagnostica**: pacchetti, salti, duplicati, ritardi.
+
 ### I test, senza scheda collegata
 
 ```powershell
@@ -252,8 +264,8 @@ web, e l'associazione si puo' revocare in qualsiasi momento.
 1. Porta il piedino **GPIO0 verso massa** e tienilo li' per **tre secondi**,
 oppure tieni premuto il pulsante di **BOOT** fino a **sei secondi**: la partita
 si azzera e si apre la finestra di commissioning. Sul
-display compare la schermata `COMMISSIONING` con il nome della scheda, lo stato
-della radio e il conto alla rovescia. La finestra resta aperta **sessanta
+display compare la schermata `COMMISSIONING`, con il titolo che **lampeggia di
+blu** e il conto alla rovescia. La finestra resta aperta **sessanta
 secondi**.
 2. Apri la pagina (`cd web; npm run dev`) e premi **COMMISSIONA SCHEDA**.
 3. Nella finestra del browser scegli `PADEL_SCORE_XXXX`, dove `XXXX` sono gli

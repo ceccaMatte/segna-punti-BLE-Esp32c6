@@ -30,6 +30,19 @@
 #define COL_DIVIDER GFX_RGB(38, 48, 62)
 #define COL_WARN    GFX_RGB(250, 190, 60)
 
+/* Il blu del titolo, acceso e spento: sono lo stesso colore a due luminosita',
+   cosi' il lampeggio non fa saltare l'occhio e la scritta resta leggibile
+   anche nel momento in cui e' spenta. */
+#define COL_TITLE_ON  GFX_RGB(74, 188, 252)
+#define COL_TITLE_OFF GFX_RGB(24, 64, 92)
+
+/* Il bordo del pannello mentre si aspetta: blu come il titolo, perche' tutta
+   la schermata dica la stessa cosa. */
+#define COL_EDGE_ON   GFX_RGB(42, 96, 132)
+
+/** Il battito del titolo: mezzo secondo acceso, mezzo spento. */
+#define UI_BLINK_MS 500u
+
 /* -------------------------------------------------------------------------- */
 /* Disposizione                                                               */
 /* -------------------------------------------------------------------------- */
@@ -44,6 +57,12 @@
 #define UI_RESULT_Y  196
 #define UI_TIMER_Y   246
 
+/* La fascia dell'intestazione, che e' l'unica parte che si ridisegna a ogni
+   battito: parte sotto il bordo del pannello e si ferma alla riga di
+   separazione, cosi' non tocca ne' il bordo ne' quello che sta sotto. */
+#define UI_HEAD_Y0   12
+#define UI_HEAD_H    (UI_RULE_Y - UI_HEAD_Y0)
+
 /* -------------------------------------------------------------------------- */
 /* Stato interno                                                              */
 /* -------------------------------------------------------------------------- */
@@ -55,6 +74,9 @@ static bool  s_drawn;
 static uint32_t s_last_revision;
 static char     s_last_name[32];
 static char     s_last_id[8];
+
+/** Ultimo stato del battito: true = titolo acceso. */
+static bool s_last_lit;
 
 /* -------------------------------------------------------------------------- */
 /* Testi                                                                      */
@@ -135,6 +157,31 @@ static uint16_t state_colour(const commissioning_state_t *state)
     }
 }
 
+/** Vero finche' c'e' un'attesa in corso: e' li' che il titolo deve lampeggiare. */
+static bool waiting(const commissioning_state_t *state)
+{
+    return state->phase == COMMISSIONING_PHASE_WAITING ||
+           state->phase == COMMISSIONING_PHASE_CONNECTED;
+}
+
+/** Il titolo: acceso o spento, secondo il battito. */
+static bool title_lit(const commissioning_state_t *state, uint32_t now_ms)
+{
+    if (!waiting(state)) {
+        /* Con l'esito in mano non c'e' piu' niente da aspettare: il titolo
+           resta acceso e si legge. */
+        return true;
+    }
+
+    return ((now_ms / UI_BLINK_MS) % 2u) == 0u;
+}
+
+/** Il bordo del pannello, blu mentre si aspetta. */
+static uint16_t edge_colour(const commissioning_state_t *state)
+{
+    return waiting(state) ? COL_EDGE_ON : COL_EDGE;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Disegno                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -147,7 +194,45 @@ static void draw_line(int y, const font_t *font, const char *text, uint16_t colo
     gfx_text_centered(&s_g, font, text, display_width() / 2, y, colour);
 }
 
-static void draw(const commissioning_state_t *state, const char *device_name, const char *short_id)
+/**
+ * L'intestazione: il titolo e lo stato della radio.
+ *
+ * Sta in due pezzi apposta: disegnarla e mandarla al pannello sono due cose
+ * diverse. Quando cambia solo il battito si disegna e si manda solo lei; quando
+ * cambia tutto il resto, la schermata intera viene ridisegnata e mandata in un
+ * colpo solo, e allora il disegno dell'intestazione serve a completare il
+ * quadro, non a se stesso.
+ *
+ * Il riquadro resta dentro il pannello: i due bordi verticali non si toccano,
+ * altrimenti il lampeggio li consumerebbe un pixel alla volta.
+ */
+static void paint_header(const commissioning_state_t *state, bool lit)
+{
+    const int width = display_width();
+
+    gfx_fill_rect(&s_g, 9, UI_HEAD_Y0, width - 18, UI_HEAD_H, COL_PANEL);
+
+    gfx_text_centered(&s_g, font_get(FONT_ID_LABEL), "COMMISSIONING", width / 2,
+                      UI_TITLE_Y, lit ? COL_TITLE_ON : COL_TITLE_OFF);
+    gfx_text_centered(&s_g, font_get(FONT_ID_TINY), ble_text(state->connected), width / 2,
+                      UI_BLE_Y, COL_LABEL);
+}
+
+/**
+ * L'intestazione da sola, disegnata e mandata al pannello.
+ *
+ * E' l'unica parte che cambia piu' spesso del conto alla rovescia, e riscrivere
+ * ogni volta tutta la schermata per una scritta che si accende e si spegne
+ * sarebbe uno spreco che si vede: due volte al secondo, per niente.
+ */
+static void draw_header(const commissioning_state_t *state, bool lit)
+{
+    paint_header(state, lit);
+    display_flush_rect(9, UI_HEAD_Y0, display_width() - 18, UI_HEAD_H);
+}
+
+static void draw(const commissioning_state_t *state, const char *device_name,
+                 const char *short_id, bool lit)
 {
     const int width = display_width();
     const int height = display_height();
@@ -159,12 +244,12 @@ static void draw(const commissioning_state_t *state, const char *device_name, co
     gfx_clear(&s_g, COL_BG);
 
     /* Il pannello centrale, come quelli della partita: serve a far leggere
-       insieme le cose che stanno insieme. */
+       insieme le cose che stanno insieme. Il bordo si tinge di blu mentre si
+       aspetta, cosi' la schermata intera dice che la scheda e' in attesa. */
     gfx_fill_rect_rounded(&s_g, 8, 8, width - 16, height - 16, 8, COL_PANEL);
-    gfx_stroke_rect_rounded(&s_g, 8, 8, width - 16, height - 16, 8, 1, COL_EDGE);
+    gfx_stroke_rect_rounded(&s_g, 8, 8, width - 16, height - 16, 8, 1, edge_colour(state));
 
-    draw_line(UI_TITLE_Y, label, "COMMISSIONING", palette_screen(TEAM_US));
-    draw_line(UI_BLE_Y, tiny, ble_text(state->connected), COL_LABEL);
+    paint_header(state, lit);
 
     gfx_fill_rect(&s_g, 20, UI_RULE_Y, width - 40, 1, COL_DIVIDER);
 
@@ -215,7 +300,8 @@ void commissioning_ui_invalidate(void)
 
 void commissioning_ui_update(const commissioning_state_t *state,
                              const char *device_name,
-                             const char *short_id)
+                             const char *short_id,
+                             uint32_t now_ms)
 {
     if (!display_ready() || state == NULL) {
         return;
@@ -230,17 +316,26 @@ void commissioning_ui_update(const commissioning_state_t *state,
 
     const char *name = (device_name != NULL) ? device_name : "";
     const char *id = (short_id != NULL) ? short_id : "";
+    const bool lit = title_lit(state, now_ms);
 
-    /* Niente di nuovo da vedere: ridisegnare sarebbe solo un lampo inutile. */
-    if (s_drawn && state->revision == s_last_revision &&
-        strcmp(name, s_last_name) == 0 && strcmp(id, s_last_id) == 0) {
+    const bool same_content = s_drawn && state->revision == s_last_revision &&
+                              strcmp(name, s_last_name) == 0 && strcmp(id, s_last_id) == 0;
+
+    if (same_content) {
+        /* Niente di nuovo da vedere: se non e' cambiato nemmeno il battito,
+           ridisegnare sarebbe solo un lampo inutile. */
+        if (lit != s_last_lit) {
+            draw_header(state, lit);
+            s_last_lit = lit;
+        }
         return;
     }
 
-    draw(state, name, id);
+    draw(state, name, id, lit);
 
     s_last_revision = state->revision;
     strlcpy(s_last_name, name, sizeof(s_last_name));
     strlcpy(s_last_id, id, sizeof(s_last_id));
+    s_last_lit = lit;
     s_drawn = true;
 }

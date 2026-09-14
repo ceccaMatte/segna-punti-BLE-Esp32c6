@@ -87,6 +87,126 @@ body {
   background: var(--warn);
 }
 
+/* --- banda di stato ------------------------------------------------------- */
+
+/* Sta sopra tutto e non si nasconde: e' la prima cosa che si guarda, ed e' la
+   risposta alla domanda "sto vedendo la scheda?". Il colore del bordo sinistro
+   e' quello dello stato, cosi' si capisce anche di sbieco. */
+.band {
+  border: 1px solid var(--edge);
+  border-left: 4px solid var(--dim);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: #10161e;
+}
+
+.band-ok {
+  border-left-color: var(--loro);
+}
+
+.band-warn {
+  border-left-color: var(--warn);
+}
+
+.band-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.band-head .dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.band-ok .band-head .dot {
+  background: var(--loro);
+}
+
+.band-warn .band-head .dot {
+  background: var(--warn);
+}
+
+.band-detail {
+  margin: 6px 0 0;
+  color: var(--label);
+  font-size: 14px;
+}
+
+.band-ident {
+  margin: 4px 0 0;
+  color: var(--dim);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- elenco delle schede -------------------------------------------------- */
+
+.section-title {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+.devices {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.device {
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #10161e;
+}
+
+.device-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.device-id {
+  color: var(--dim);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.tag {
+  padding: 2px 6px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--label);
+}
+
+.tag-on {
+  color: var(--loro);
+  border-color: rgba(58, 216, 138, 0.5);
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--dim);
+  font-size: 13px;
+}
+
 /* --- elenchi di fatti ----------------------------------------------------- */
 
 .facts {
@@ -156,6 +276,12 @@ button.primary {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+/* Il tabellone quando non arriva piu' niente: l'ultimo punteggio resta li' per
+   memoria, ma si capisce a colpo d'occhio che e' fermo. */
+.board-stale {
+  opacity: 0.45;
 }
 
 .side {

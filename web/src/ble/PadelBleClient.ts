@@ -43,9 +43,50 @@ export interface ClientEvents {
   onError?: (message: string) => void;
 }
 
+/** Una scheda che questa pagina ha il permesso di rivedere. */
+export interface KnownDevice {
+  id: string;
+  name: string;
+}
+
 /** Vero se il browser ha Web Bluetooth. */
 export function bluetoothAvailable(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+}
+
+/**
+ * Le schede che il browser lascia rivedere a questa pagina.
+ *
+ * Non e' una scansione: e' l'elenco dei permessi, e contiene solo le schede
+ * scelte almeno una volta da questa pagina. Non si possono elencare le schede
+ * che passano li' intorno, e non e' una cosa che si possa aggirare: le regole
+ * di Web Bluetooth non lo permettono.
+ *
+ * @return le schede note, oppure null se il browser non sa elencarle. Le due
+ *         cose sono diverse: "non si puo' sapere" non e' "non ce n'e' nesuna".
+ */
+export async function listKnownDevices(): Promise<KnownDevice[] | null> {
+  if (!bluetoothAvailable()) {
+    return null;
+  }
+
+  const bluetooth = navigator.bluetooth as Bluetooth & {
+    getDevices?: () => Promise<BluetoothDevice[]>;
+  };
+
+  if (typeof bluetooth.getDevices !== 'function') {
+    return null;
+  }
+
+  try {
+    const devices = await bluetooth.getDevices();
+    return devices.map((device) => ({
+      id: device.id,
+      name: device.name ?? '(senza nome)',
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export class PadelBleClient {

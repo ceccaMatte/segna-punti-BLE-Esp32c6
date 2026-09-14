@@ -53,7 +53,7 @@ export class ScoreboardPanel {
       );
     }
 
-    const board = el('div', 'board');
+    const board = el('div', stale ? 'board board-stale' : 'board');
     board.append(
       sideColumn('LORO', view.loro, 'side-loro'),
       sideColumn('NOI', view.noi, 'side-noi'),

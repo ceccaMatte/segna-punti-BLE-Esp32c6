@@ -16,7 +16,7 @@
  * Lo stato della partita non si calcola mai qui: si riceve e si mostra.
  */
 
-import { PadelBleClient, bluetoothAvailable } from './ble/PadelBleClient';
+import { PadelBleClient, bluetoothAvailable, listKnownDevices, type KnownDevice } from './ble/PadelBleClient';
 import { PacketDiagnostics } from './ble/diagnostics';
 import { shortIdFromValue } from './ble/hex';
 import {
@@ -29,9 +29,11 @@ import {
 } from './ble/protocol';
 import { toView, type ScoreView } from './score/ScoreState';
 import { CommissioningStorage, type Association } from './storage/CommissioningStorage';
-import { ConnectionPanel } from './ui/ConnectionPanel';
+import { ConnectionPanel, type DeviceRow } from './ui/ConnectionPanel';
 import { DiagnosticsPanel } from './ui/DiagnosticsPanel';
 import { ScoreboardPanel } from './ui/ScoreboardPanel';
+import { StatusBand } from './ui/StatusBand';
+import type { DataFacts, StatusFacts } from './ui/status';
 
 /* -------------------------------------------------------------------------- */
 /* Elementi della pagina                                                      */
@@ -59,6 +61,9 @@ let score: ScoreView | null = null;
 let message: string | null = null;
 let busy = false;
 
+/** Le schede che il browser lascia rivedere; null se non sa elencarle. */
+let knownDevices: KnownDevice[] | null = null;
+
 /** Token generato e in attesa che la scheda lo accetti. */
 let pendingToken: Uint8Array | null = null;
 
@@ -71,12 +76,14 @@ let streaming = false;
 
 const scoreboard = new ScoreboardPanel(need('score-content'));
 const diagnosticsPanel = new DiagnosticsPanel(need('diagnostics-facts'));
+const statusBand = new StatusBand(need('status-band'));
 
 const connection = new ConnectionPanel(
   need('connection-status'),
   need('connection-facts'),
   need('connection-message'),
   need('connection-actions'),
+  need('connection-devices'),
   {
     onCommission: () => void commission(),
     onReconnect: () => void reconnect(),
@@ -329,32 +336,121 @@ function report(error: unknown): void {
 /* -------------------------------------------------------------------------- */
 
 function render(): void {
+  const facts = statusFacts();
+  const data = dataFacts();
+
+  statusBand.render(facts, data, identLine());
+
   connection.render({
-    supported: bluetoothAvailable(),
-    connected: client.connected,
-    deviceName: client.deviceName ?? association?.deviceName ?? null,
+    supported: facts.supported,
+    connected: facts.connected,
+    authenticated: facts.authenticated,
+    connectedName: facts.connectedName,
+    knownName: facts.knownName,
     shortId:
       info !== null ? shortIdFromValue(info.shortId) : (association?.shortId ?? null),
+    firmware: info !== null ? info.firmware : null,
     state: status !== null ? status.state : (info?.state ?? null),
-    authenticated: status?.authenticated ?? false,
-    remainingSeconds:
-      status !== null && status.remainingSeconds > 0 ? status.remainingSeconds : null,
+    remainingSeconds: data.remainingSeconds,
     message,
     hasAssociation: association !== null,
     busy,
+    devices: deviceRows(),
+    canListDevices: knownDevices !== null,
   });
 
-  scoreboard.render(score, !client.connected);
+  scoreboard.render(score, !facts.connected);
   diagnosticsPanel.render(diagnostics, Date.now());
+}
+
+/** Quello che si sa del collegamento, come lo vuole `status.ts`. */
+function statusFacts(): StatusFacts {
+  return {
+    supported: bluetoothAvailable(),
+    connected: client.connected,
+    authenticated: status?.authenticated ?? false,
+    connectedName: client.deviceName,
+    knownName: association?.deviceName ?? null,
+    busy,
+  };
+}
+
+/** Quello che si sa dei dati in arrivo. */
+function dataFacts(): DataFacts {
+  return {
+    ageMs: diagnostics.ageMs(Date.now()),
+    remainingSeconds:
+      status !== null && status.remainingSeconds > 0 ? status.remainingSeconds : null,
+  };
+}
+
+/** La riga che dice quale scheda si sta guardando. */
+function identLine(): string | null {
+  const nome = client.deviceName ?? association?.deviceName ?? null;
+  if (nome === null) {
+    return null;
+  }
+
+  const parti = [nome];
+  const breve = info !== null ? shortIdFromValue(info.shortId) : (association?.shortId ?? null);
+
+  if (breve !== null && breve !== '') {
+    parti.push(`Device ${breve}`);
+  }
+  if (info !== null) {
+    parti.push(`firmware ${info.firmware}`);
+  }
+  if (!client.connected) {
+    parti.push('non collegata adesso');
+  }
+
+  return parti.join(' — ');
+}
+
+/**
+ * Le schede da mostrare in elenco.
+ *
+ * Se il browser sa elencarle si mostrano quelle, altrimenti resta solo quella
+ * che questa pagina conosce per conto suo: l'associazione salvata.
+ */
+function deviceRows(): DeviceRow[] {
+  if (knownDevices === null) {
+    if (association === null) {
+      return [];
+    }
+    return [
+      {
+        name: association.deviceName,
+        id: association.browserDeviceId,
+        associated: true,
+        connected: client.connected && client.deviceId === association.browserDeviceId,
+      },
+    ];
+  }
+
+  return knownDevices.map((device) => ({
+    name: device.name,
+    id: device.id,
+    associated: association !== null && association.browserDeviceId === device.id,
+    connected: client.connected && client.deviceId === device.id,
+  }));
 }
 
 render();
 
 /* L'eta' dell'ultimo aggiornamento cambia anche senza che arrivi niente: si
-   rinfresca solo la diagnostica, per non far sparire i pulsanti sotto il dito
-   di chi sta per premere. */
+   rinfrescano solo la banda e la diagnostica, per non far sparire i pulsanti
+   sotto il dito di chi sta per premere. */
 setInterval(() => {
+  statusBand.render(statusFacts(), dataFacts(), identLine());
   diagnosticsPanel.render(diagnostics, Date.now());
 }, 1000);
 
+void refreshKnownDevices();
 void tryQuietReconnect();
+
+/** Rilegge l'elenco delle schede note al browser. */
+async function refreshKnownDevices(): Promise<void> {
+  knownDevices = await listKnownDevices();
+  render();
+}

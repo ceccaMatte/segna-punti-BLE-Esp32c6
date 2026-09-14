@@ -464,7 +464,8 @@ void app_main(void)
         if (commissioning_manager_screen_active()) {
             commissioning_ui_update(commissioning_manager_state(),
                                     commissioning_manager_device_name(),
-                                    commissioning_manager_short_id());
+                                    commissioning_manager_short_id(),
+                                    now_ms);
             commissioning_screen = true;
         } else {
             if (commissioning_screen) {
