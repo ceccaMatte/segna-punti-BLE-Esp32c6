@@ -142,14 +142,12 @@ static void draw_serve_dot(int cx, bool serving, uint16_t accent)
  * quanti caratteri ha: "40" e "15" hanno la stessa lunghezza ma non la stessa
  * larghezza, e "AD" e' molto piu' largo di entrambi.
  */
-static void draw_score(const char *text, int cx, uint16_t accent)
+static void draw_score(const char *text, int cx)
 {
     const font_t *f = font_pick_for_score(text, UI_SCORE_MAX_W);
     const int y = UI_SCORE_Y + (UI_SCORE_H - (int)f->cell_height) / 2;
 
-    /* L'alone e' lo stesso colore della squadra mescolato con il fondo del
-       pannello: resta dentro la zona e non serve nessun pixel trasparente. */
-    gfx_text_glow(&s_g, f, text, cx, y, COL_TEXT, mix(COL_PANEL, accent, 120));
+    gfx_text_centered(&s_g, f, text, cx, y, COL_TEXT);
 }
 
 /** Il pannello di una squadra: nome, pallino e punteggio, riscritti da zero. */
@@ -175,7 +173,7 @@ static void draw_panel(const ui_view_t *v, team_t team)
 
     draw_serve_dot(cx, (team == TEAM_THEM) ? v->loro_serve : v->noi_serve, accent);
 
-    draw_score((team == TEAM_THEM) ? v->loro_score : v->noi_score, cx, accent);
+    draw_score((team == TEAM_THEM) ? v->loro_score : v->noi_score, cx);
 }
 
 /** Una delle due righe in basso: etichetta al centro, un numero per lato. */
@@ -231,7 +229,7 @@ static void draw_overlay(const ui_view_t *v)
     const font_t *score = font_get(FONT_ID_SCORE);
     char buf[4];
     small_number(buf, sizeof(buf), sets);
-    gfx_text_glow(&s_g, score, buf, w / 2, 150, COL_TEXT, mix(COL_BG, accent, 130));
+    gfx_text_centered(&s_g, score, buf, w / 2, 150, COL_TEXT);
 
     gfx_text_centered(&s_g, font_get(FONT_ID_TINY), "SET", w / 2, 232, COL_DIM);
 }
@@ -340,9 +338,28 @@ void ui_update(const ui_view_t *view)
             continue;
         }
         draw_slot((ui_slot_t)slot, view);
+    }
 
-        if (slot != (int)UI_SLOT_OVERLAY || view->overlay) {
-            dirty_add_rect(&s_dirty, slot_rect((ui_slot_t)slot));
+    /*
+     * Al primo disegno si manda tutto lo schermo, non solo le zone.
+     *
+     * L'intestazione, la riga di separazione e il fondo della pagina vengono
+     * disegnati una volta sola da ui_init(), e non appartengono a nessuna zona:
+     * se il primo aggiornamento mandasse solo le zone, quelle parti non
+     * arriverebbero mai al pannello e resterebbero visibili i pixel che la
+     * memoria del controller conteneva all'accensione. Lo stesso vale per le
+     * righe in cima allo schermo, che nessuna zona copre.
+     */
+    if (!s_drawn) {
+        dirty_add_rect(&s_dirty, ui_view_first_paint_rect());
+    } else {
+        for (int slot = 0; slot < (int)UI_SLOT_COUNT; ++slot) {
+            if ((mask & UI_SLOT_BIT((ui_slot_t)slot)) == 0) {
+                continue;
+            }
+            if (slot != (int)UI_SLOT_OVERLAY || view->overlay) {
+                dirty_add_rect(&s_dirty, slot_rect((ui_slot_t)slot));
+            }
         }
     }
 

@@ -214,6 +214,12 @@ gfx_rect_t ui_view_slot_rect(ui_slot_t slot)
     }
 }
 
+gfx_rect_t ui_view_first_paint_rect(void)
+{
+    /* Tutto lo schermo, riga 0 compresa. */
+    return (gfx_rect_t){ 0, 0, UI_SCREEN_W, UI_SCREEN_H };
+}
+
 /** Vero se i due rettangoli hanno almeno un pixel in comune. */
 static bool rects_overlap(gfx_rect_t a, gfx_rect_t b)
 {

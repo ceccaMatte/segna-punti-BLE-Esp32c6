@@ -100,34 +100,59 @@ static void test_punteggio_leggibile(void)
     test_end("i punteggi che capitano davvero restano nella cifra grande");
 }
 
-static void test_alone_dentro_il_pannello(void)
+static void test_primo_disegno_copre_tutto(void)
 {
-    test_begin("l'alone attorno alla cifra resta dentro il pannello");
+    test_begin("il primo disegno manda al pannello lo schermo intero");
 
     /*
-     * La cifra viene disegnata con un alone di un pixel per lato. Se il testo
-     * arrivasse esattamente al bordo, l'alone finirebbe sopra la cornice del
-     * pannello: due pixel di colore sbagliato che nessuno noterebbe finche' non
-     * si guarda da vicino.
+     * L'intestazione, la riga di separazione e il fondo della pagina vengono
+     * disegnati una volta sola all'avvio e non appartengono a nessuna zona. Se
+     * il primo aggiornamento mandasse solo le zone, quelle parti non
+     * arriverebbero mai al pannello: resterebbero visibili i pixel che la
+     * memoria del controller conteneva all'accensione.
+     *
+     * Non e' un'ipotesi: e' quello che si vedeva sulla scheda, una striscia di
+     * pixel colorati in cima allo schermo e la scritta dell'intestazione che
+     * non compariva mai.
      */
-    char buffer[UI_SCORE_TEXT_MAX];
-    const char *cases[] = { "0", "15", "30", "40", "AD", "99" };
+    const gfx_rect_t first = ui_view_first_paint_rect();
 
-    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
-        const font_t *f = font_pick_for_score(cases[i], UI_SCORE_MAX_W);
-        CHECK((int)font_measure_text(f, cases[i]) + 2 <= UI_PANEL_W);
+    CHECK_EQ(first.x, 0);
+    CHECK_EQ(first.y, 0);
+    CHECK_EQ(first.w, UI_SCREEN_W);
+    CHECK_EQ(first.h, UI_SCREEN_H);
+
+    /* nessuna zona puo' restare fuori da quella del primo disegno */
+    for (int slot = 0; slot < (int)UI_SLOT_COUNT; ++slot) {
+        const gfx_rect_t r = ui_view_slot_rect((ui_slot_t)slot);
+        CHECK(r.x >= first.x);
+        CHECK(r.y >= first.y);
+        CHECK(r.x + r.w <= first.x + first.w);
+        CHECK(r.y + r.h <= first.y + first.h);
     }
 
-    for (int n = 0; n <= 999; ++n) {
-        (void)snprintf(buffer, sizeof(buffer), "%d", n);
-        const font_t *f = font_pick_for_score(buffer, UI_SCORE_MAX_W);
-        if ((int)font_measure_text(f, buffer) + 2 > UI_PANEL_W) {
-            FAIL("alone fuori dal pannello");
-            break;
+    /* E soprattutto: le zone da sole non bastano a coprire lo schermo, quindi
+       il primo disegno non puo' limitarsi a quelle. Se un giorno le zone
+       coprissero tutto, questo controllo smetterebbe di avere senso e sarebbe
+       giusto toglierlo. */
+    int covered = 0;
+    for (int y = 0; y < UI_SCREEN_H; ++y) {
+        for (int x = 0; x < UI_SCREEN_W; ++x) {
+            for (int slot = 0; slot < (int)UI_SLOT_COUNT; ++slot) {
+                if ((ui_slot_t)slot == UI_SLOT_OVERLAY) {
+                    continue;
+                }
+                const gfx_rect_t r = ui_view_slot_rect((ui_slot_t)slot);
+                if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
+                    covered++;
+                    break;
+                }
+            }
         }
     }
+    CHECK(covered < UI_SCREEN_W * UI_SCREEN_H);
 
-    test_end("l'alone attorno alla cifra resta dentro il pannello");
+    test_end("il primo disegno manda al pannello lo schermo intero");
 }
 
 static void test_cifra_centrata_sta_nel_pannello(void)
@@ -308,7 +333,7 @@ void test_layout_all(void)
 
     test_punteggi_entrano();
     test_punteggio_leggibile();
-    test_alone_dentro_il_pannello();
+    test_primo_disegno_copre_tutto();
     test_cifra_centrata_sta_nel_pannello();
     test_cifra_dentro_la_sua_fascia();
     test_righe_non_si_sovrappongono();

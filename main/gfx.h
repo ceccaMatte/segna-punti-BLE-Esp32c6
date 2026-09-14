@@ -109,23 +109,6 @@ int gfx_text(gfx_t *g, const font_t *f, const char *text, int x, int y, uint16_t
 int gfx_text_centered(gfx_t *g, const font_t *f, const char *text, int cx, int y,
                       uint16_t color);
 
-/**
- * @brief Testo con un alone luminoso attorno.
- *
- * L'alone e' fatto con due passate di copie sfalsate e semitrasparenti, non con
- * una sfocatura: su un microcontrollore una sfocatura vera costerebbe molto e
- * non si vedrebbe la differenza su caratteri di questa dimensione.
- *
- * @param color colore pieno del testo
- * @param glow  colore dell'alone, di solito lo stesso ma piu' scuro
- */
-void gfx_text_glow(gfx_t *g, const font_t *f, const char *text, int cx, int y,
-                   uint16_t color, uint16_t glow);
-
-/** Come ::gfx_text_glow con il bordo sinistro al posto del centro. */
-void gfx_text_glow_at(gfx_t *g, const font_t *f, const char *text, int x, int y,
-                      uint16_t color, uint16_t glow);
-
 /* -------------------------------------------------------------------------- */
 /* Utilità                                                                    */
 /* -------------------------------------------------------------------------- */

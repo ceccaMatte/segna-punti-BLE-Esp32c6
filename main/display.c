@@ -15,6 +15,9 @@
 
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -91,6 +94,36 @@ static esp_lcd_panel_handle_t    s_panel;
 static esp_lcd_panel_io_handle_t s_io;
 static uint16_t                 *s_staging;
 static bool                      s_ready;
+
+/**
+ * Il buffer di servizio e' libero.
+ *
+ * Le trasmissioni verso il pannello non sono immediate: il driver mette in coda
+ * il trasferimento e torna subito, mentre i byte escono dal filo nei
+ * millisecondi successivi.
+ *
+ * Il buffer di servizio e' uno solo e viene riusato a ogni fascia, quindi
+ * riscriverlo senza aspettare vuol dire cambiare i byte mentre il pannello li
+ * sta ancora leggendo. Non e' un guasto evidente: il risultato e' un'immagine
+ * sbagliata, con la fascia appena preparata che prende il posto di quella in
+ * corso e quindi lo stesso contenuto che compare due volte a quote diverse.
+ *
+ * Questo semaforo viene dato quando il trasferimento e' davvero concluso. E'
+ * pieno all'inizio, perche' appena avviati il buffer e' libero.
+ */
+static SemaphoreHandle_t s_staging_free;
+
+/** Chiamata dal driver quando il pannello ha finito di leggere i byte. */
+static bool on_color_trans_done(esp_lcd_panel_io_handle_t io,
+                                esp_lcd_panel_io_event_data_t *event, void *user_ctx)
+{
+    (void)io;
+    (void)event;
+
+    BaseType_t woken = pdFALSE;
+    xSemaphoreGiveFromISR((SemaphoreHandle_t)user_ctx, &woken);
+    return woken == pdTRUE;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Interrogazioni                                                             */
@@ -182,12 +215,10 @@ static esp_err_t bus_and_panel_init(void)
                         TAG, "bus SPI non disponibile");
 
     /*
-     * La coda delle trasmissioni e' volutamente lunga uno.
-     *
-     * Con un solo posto in coda, una nuova richiesta resta bloccata finche' la
-     * precedente non e' finita di uscire dal filo. Questo garantisce che il
-     * buffer di servizio, che e' uno solo e viene riusato a ogni pezzo, non
-     * venga riscritto mentre il pannello lo sta ancora leggendo.
+     * La coda delle trasmissioni e' lunga uno: non serve altro, perche' a
+     * ordinare le cose ci pensa il semaforo di fine trasmissione. Con la coda
+     * piu' lunga il driver accumulerebbe piu' richieste e il semaforo, che e'
+     * binario, non direbbe piu' quante ne restano.
      */
     const esp_lcd_panel_io_spi_config_t io_config = {
         .cs_gpio_num       = LCD_PIN_CS,
@@ -201,6 +232,17 @@ static esp_err_t bus_and_panel_init(void)
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI2_HOST,
                                                  &io_config, &s_io),
                         TAG, "impossibile creare l'interfaccia del pannello");
+
+    /*
+     * La fine di ogni trasmissione va segnalata: e' l'unico momento in cui si
+     * sa per certo che il buffer di servizio non e' piu' in uso.
+     */
+    const esp_lcd_panel_io_callbacks_t io_callbacks = {
+        .on_color_trans_done = on_color_trans_done,
+    };
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_io_register_event_callbacks(s_io, &io_callbacks,
+                                                                  s_staging_free),
+                        TAG, "impossibile registrare la fine delle trasmissioni");
 
     const esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = LCD_PIN_RST,
@@ -247,6 +289,14 @@ esp_err_t display_init(void)
         return ESP_ERR_NO_MEM;
     }
 
+    s_staging_free = xSemaphoreCreateBinary();
+    if (s_staging_free == NULL) {
+        ESP_LOGE(TAG, "impossibile creare il semaforo del buffer di servizio");
+        return ESP_ERR_NO_MEM;
+    }
+    /* All'avvio non c'e' nessuna trasmissione in corso. */
+    (void)xSemaphoreGive(s_staging_free);
+
     const esp_err_t err = bus_and_panel_init();
     if (err != ESP_OK) {
         return err;
@@ -288,6 +338,18 @@ static void flush_chunk(int x, int y, int w, int h)
         int rows = h - done;
         if (rows > rows_per_pass) {
             rows = rows_per_pass;
+        }
+
+        /*
+         * Il punto delicato di tutto il file.
+         *
+         * Prima di riscrivere il buffer di servizio bisogna aspettare che la
+         * trasmissione precedente abbia finito di leggerlo. La coda del driver
+         * non basta a garantirlo: blocca la chiamata successiva, non la copia
+         * che viene fatta prima di chiamarla.
+         */
+        if (xSemaphoreTake(s_staging_free, portMAX_DELAY) != pdTRUE) {
+            return;
         }
 
         for (int r = 0; r < rows; ++r) {

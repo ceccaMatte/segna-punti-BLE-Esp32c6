@@ -315,11 +315,9 @@ uint16_t gfx_blend(uint16_t dst, uint16_t src, uint8_t alpha)
  * ``cell_height``, che e' l'altezza del font, non quella del buffer. Il 255
  * prende il colore pieno, lo 0 lascia il fondo, i valori intermedi mescolano i
  * due: e' questo che ammorbidisce i bordi delle lettere.
- *
- * @param weight opacita' con cui pesare la copertura, 255 per il testo pieno
  */
 static void blit_glyph(gfx_t *g, const glyph_t *glyph, int cell_height, int x, int y,
-                       uint16_t color, uint8_t weight)
+                       uint16_t color)
 {
     if (g == NULL || g->pixels == NULL || glyph == NULL || glyph->bitmap == NULL) {
         return;
@@ -343,40 +341,13 @@ static void blit_glyph(gfx_t *g, const glyph_t *glyph, int cell_height, int x, i
                 continue;
             }
 
-            uint32_t coverage = src[col];
+            const uint8_t coverage = src[col];
             if (coverage == 0) {
                 continue;
             }
-            if (weight != 255u) {
-                coverage = mul_255(coverage, weight);
-                if (coverage == 0) {
-                    continue;
-                }
-            }
 
-            dst[px] = gfx_blend(dst[px], color, (uint8_t)coverage);
+            dst[px] = gfx_blend(dst[px], color, coverage);
         }
-    }
-}
-
-/**
- * Passata di alone: la stessa forma del testo, spostata e resa tenue.
- *
- * Non serve una copia temporanea del glifo: il peso si applica alla copertura
- * mentre si scrive, un pixel per volta.
- */
-static void glow_pass(gfx_t *g, const font_t *f, const char *text, int x, int y,
-                      uint16_t glow, uint8_t weight)
-{
-    int pen = x;
-    for (const char *p = text; *p != '\0'; ++p) {
-        const glyph_t *glyph = font_glyph(f, *p);
-        if (glyph == NULL) {
-            pen += f->cell_height + f->letter_spacing;
-            continue;
-        }
-        blit_glyph(g, glyph, f->cell_height, pen, y, glow, weight);
-        pen += glyph->advance + f->letter_spacing;
     }
 }
 
@@ -395,7 +366,7 @@ int gfx_text(gfx_t *g, const font_t *f, const char *text, int x, int y, uint16_t
             pen += f->cell_height + f->letter_spacing;
             continue;
         }
-        blit_glyph(g, glyph, f->cell_height, pen, y, color, 255);
+        blit_glyph(g, glyph, f->cell_height, pen, y, color);
         pen += glyph->advance + f->letter_spacing;
     }
 
@@ -411,37 +382,4 @@ int gfx_text_centered(gfx_t *g, const font_t *f, const char *text, int cx, int y
     }
     const int width = (int)font_measure_text(f, text);
     return gfx_text(g, f, text, cx - width / 2, y, color);
-}
-
-void gfx_text_glow_at(gfx_t *g, const font_t *f, const char *text, int x, int y,
-                      uint16_t color, uint16_t glow)
-{
-    if (g == NULL || f == NULL || text == NULL || *text == '\0') {
-        return;
-    }
-
-    /* Due corone: prima quella diagonale, larga e tenue, poi quella ortogonale,
-       piu' marcata perche' cade piu' vicino al bordo. Infine il testo pieno.
-       Niente sfocatura: la forma dell'alone e' esattamente quella del testo. */
-    glow_pass(g, f, text, x - 1, y - 1, glow, 80);
-    glow_pass(g, f, text, x + 1, y - 1, glow, 80);
-    glow_pass(g, f, text, x - 1, y + 1, glow, 80);
-    glow_pass(g, f, text, x + 1, y + 1, glow, 80);
-
-    glow_pass(g, f, text, x,     y - 1, glow, 150);
-    glow_pass(g, f, text, x,     y + 1, glow, 150);
-    glow_pass(g, f, text, x - 1, y,     glow, 150);
-    glow_pass(g, f, text, x + 1, y,     glow, 150);
-
-    (void)gfx_text(g, f, text, x, y, color);
-}
-
-void gfx_text_glow(gfx_t *g, const font_t *f, const char *text, int cx, int y,
-                   uint16_t color, uint16_t glow)
-{
-    if (g == NULL || f == NULL || text == NULL || *text == '\0') {
-        return;
-    }
-    const int width = (int)font_measure_text(f, text);
-    gfx_text_glow_at(g, f, text, cx - width / 2, y, color, glow);
 }

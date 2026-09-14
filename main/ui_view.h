@@ -183,5 +183,16 @@ const char *ui_slot_name(ui_slot_t slot);
  */
 gfx_rect_t ui_view_slot_rect(ui_slot_t slot);
 
+/**
+ * @brief La zona da mandare al pannello al primo disegno.
+ *
+ * Non e' l'unione delle zone, ed e' importante che non lo sia: l'intestazione,
+ * la riga di separazione e il fondo della pagina vengono disegnati una volta
+ * sola all'avvio e non appartengono a nessuna zona. Un primo aggiornamento
+ * limitato alle zone li lascerebbe nella memoria del controller senza mai
+ * mandarli al pannello, insieme ai pixel che c'erano all'accensione.
+ */
+gfx_rect_t ui_view_first_paint_rect(void);
+
 /** Vero se due zone si sovrappongono. La schermata del vincitore e' esclusa. */
 bool ui_slot_rects_overlap(void);
