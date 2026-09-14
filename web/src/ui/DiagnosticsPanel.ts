@@ -3,7 +3,9 @@
  *
  * Serve a rispondere alla domanda che si fa sempre provando una cosa nuova:
  * "ma e' affidabile?". Qui si vede se i pacchetti arrivano tutti, se qualcuno si
- * ripete, da quanto non ne arrivano e quando e' caduta la connessione.
+ * ripete, da quanto non ne arrivano e quando e' caduta la connessione. C'e'
+ * anche quanto e' durata l'ultima interruzione, che e' il modo di sapere se la
+ * riconnessione automatica e' davvero veloce come si vorrebbe.
  */
 
 import type { PacketDiagnostics } from '../ble/diagnostics';
@@ -32,6 +34,8 @@ export class DiagnosticsPanel {
         ['Salti', String(diagnostics.gaps)],
         ['Duplicati', String(diagnostics.duplicates)],
         ['Disconnessioni', String(diagnostics.disconnects)],
+        ['Riconnessioni', String(diagnostics.reconnects)],
+        ['Ultima interruzione', ageText(diagnostics.lastOutageMs)],
         [
           'Ultimo aggiornamento',
           diagnostics.lastUpdate === null ? '—' : new Date(diagnostics.lastUpdate).toLocaleTimeString(),

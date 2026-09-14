@@ -18,13 +18,20 @@
  * subito e che al decimo non si continui a martellare la radio.
  *
  * Perche' i tempi si allargano: se la scheda e' spenta non serve riprovare ogni
- * secondo. Perche' c'e' un tetto a quindici secondi: se e' accesa e lontana,
- * riprovare con calma non da' noia a nessuno e non consuma la batteria del
- * computer.
+ * secondo. Perche' l'inizio e' fitto: la scheda che si riavvia torna in piedi in
+ * un paio di secondi, e quei due secondi vanno coperti tentando spesso, non
+ * aspettando. Perche' il tetto e' otto secondi e non quindici: una scheda accesa
+ * e lontana risponde appena si avvicina, e con un tetto alto si sarebbe aspettato
+ * troppo per un tentativo che costa niente.
+ *
+ * La scala, in millisecondi: 500, 500, 1000, 1000, 2000, 2000, 3000, 5000, 8000
+ * e poi sempre 8000. Dalla caduta al nono tentativo passano ventitre secondi;
+ * con la scala di prima, che cominciava da un secondo e allargava subito, ne
+ * passavano sessanta.
  */
 
 /** Quanto si aspetta prima di riprovare, tentativo dopo tentativo. */
-export const RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 15000] as const;
+export const RETRY_DELAYS_MS = [500, 500, 1000, 1000, 2000, 2000, 3000, 5000, 8000] as const;
 
 /**
  * @param failedAttempts quanti tentativi sono gia' falliti.

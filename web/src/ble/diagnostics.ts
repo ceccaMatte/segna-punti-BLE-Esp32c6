@@ -27,6 +27,20 @@ export class PacketDiagnostics {
   /** Quante volte la connessione e' caduta. */
   disconnects = 0;
 
+  /** Quante volte il collegamento e' tornato dopo essere caduto. */
+  reconnects = 0;
+
+  /**
+   * Quanto e' durata l'ultima interruzione, in millisecondi.
+   *
+   * E' il numero che dice se la riconnessione automatica sta facendo il suo
+   * mestiere: se la scheda si riavvia in due secondi, la pagina non dovrebbe
+   * metterci molto di piu' a tornare a mostrare il punteggio.
+   */
+  lastOutageMs: number | null = null;
+
+  /** Quando e' caduto il collegamento, se e' caduto e non e' ancora tornato. */
+  private disconnectedAt: number | null = null;
   /** Quando e' arrivato l'ultimo pacchetto, in millisecondi da epoch. */
   lastUpdate: number | null = null;
 
@@ -75,8 +89,28 @@ export class PacketDiagnostics {
     this.lastUpdate = now;
   }
 
-  noteDisconnect(): void {
+  noteDisconnect(now: number): void {
     this.disconnects += 1;
+    this.disconnectedAt = now;
+  }
+
+  /**
+   * Registra che il collegamento e' tornato.
+   *
+   * @return quanto e' durata l'interruzione, o null se non c'era niente da
+   *         chiudere (prima connessione della pagina, o caduta mai vista).
+   */
+  noteReconnect(now: number): number | null {
+    if (this.disconnectedAt === null) {
+      return null;
+    }
+
+    const outage = now - this.disconnectedAt;
+    this.disconnectedAt = null;
+    this.reconnects += 1;
+    this.lastOutageMs = outage;
+
+    return outage;
   }
 
   noteError(message: string): void {

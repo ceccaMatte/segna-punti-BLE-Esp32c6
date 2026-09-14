@@ -78,17 +78,43 @@ describe('tempi ed errori', () => {
   });
 
   it('conta le disconnessioni e ricorda l\'ultimo errore', () => {
-    diagnostics.noteDisconnect();
-    diagnostics.noteDisconnect();
+    diagnostics.noteDisconnect(1000);
+    diagnostics.noteDisconnect(2000);
     diagnostics.noteError('collegamento caduto');
 
     expect(diagnostics.disconnects).toBe(2);
     expect(diagnostics.lastError).toBe('collegamento caduto');
   });
 
+  it('misura quanto e\' durata l\'interruzione', () => {
+    diagnostics.noteDisconnect(1000);
+    const outage = diagnostics.noteReconnect(3250);
+
+    expect(outage).toBe(2250);
+    expect(diagnostics.lastOutageMs).toBe(2250);
+    expect(diagnostics.reconnects).toBe(1);
+  });
+
+  it('la prima connessione non e\' una riconnessione', () => {
+    expect(diagnostics.noteReconnect(1000)).toBeNull();
+    expect(diagnostics.reconnects).toBe(0);
+    expect(diagnostics.lastOutageMs).toBeNull();
+  });
+
+  it('due interruzioni di fila non si sommano', () => {
+    diagnostics.noteDisconnect(1000);
+    diagnostics.noteReconnect(2000);
+    diagnostics.noteDisconnect(5000);
+    diagnostics.noteReconnect(5600);
+
+    expect(diagnostics.reconnects).toBe(2);
+    /* L'ultima, non la somma. */
+    expect(diagnostics.lastOutageMs).toBe(600);
+  });
+
   it('azzerando si dimentica tutto tranne le disconnessioni', () => {
     diagnostics.notePacket(10, 1);
-    diagnostics.noteDisconnect();
+    diagnostics.noteDisconnect(1500);
     diagnostics.reset();
 
     expect(diagnostics.packets).toBe(0);

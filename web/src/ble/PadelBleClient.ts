@@ -49,6 +49,51 @@ export interface KnownDevice {
   name: string;
 }
 
+/**
+ * Quanto si aspetta che la scheda risponda a un tentativo di collegamento.
+ *
+ * Quando la scheda e' spenta, lontana o ancora in avvio, `connect()` del browser
+ * puo' restare in sospeso per parecchi secondi. Finche' quella promessa non si
+ * conclude la riconnessione non puo' riprovare, e la scala dei tentativi resta
+ * ferma dietro a un tentativo che non rispondera' mai. Una scheda che c'e'
+ * risponde in meno di un secondo: cinque sono gia' un'attesa generosa.
+ */
+export const CONNECT_TIMEOUT_MS = 5000;
+
+/**
+ * `gatt.connect()`, ma con un limite di tempo.
+ *
+ * Scaduto il tempo si chiude quello che era rimasto aperto — senza, il tentativo
+ * abbandonato potrebbe concludersi da solo piu' tardi, e la pagina si troverebbe
+ * collegata a sorpresa mentre sta gia' riprovando.
+ */
+function connectWithTimeout(
+  gatt: BluetoothRemoteGATTServer,
+  timeoutMs: number,
+): Promise<BluetoothRemoteGATTServer> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try {
+        gatt.disconnect();
+      } catch {
+        /* Il collegamento non c'era comunque. */
+      }
+      reject(new Error('la scheda non ha risposto in tempo'));
+    }, timeoutMs);
+
+    gatt.connect().then(
+      (server) => {
+        clearTimeout(timer);
+        resolve(server);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error('collegamento non riuscito'));
+      },
+    );
+  });
+}
+
 /** Vero se il browser ha Web Bluetooth. */
 export function bluetoothAvailable(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
@@ -184,12 +229,14 @@ export class PadelBleClient {
 
     this.device = device;
 
-    const server = await device.gatt?.connect();
-    if (!server) {
-      throw new Error('collegamento non riuscito');
+    const gatt = device.gatt;
+    if (!gatt) {
+      throw new Error('collegamento non disponibile per questa scheda');
     }
-    this.server = server;
 
+    this.server = await connectWithTimeout(gatt, CONNECT_TIMEOUT_MS);
+
+    const server = this.server;
     const service = await server.getPrimaryService(SERVICE_UUID);
 
     const score = await service.getCharacteristic(SCORE_STATE_UUID);

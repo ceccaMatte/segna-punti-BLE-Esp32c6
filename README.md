@@ -202,10 +202,13 @@ Quello che si vede, dall'alto in basso:
 - il pannello **Diagnostica**: pacchetti, salti, duplicati, ritardi.
 
 La pagina **riprova da sola** quando il collegamento cade — la scheda si
-riavvia, o passa un disturbo — come fanno le cuffie quando le riaccendi: subito,
-poi sempre più di rado, senza che nessuno prema niente. Mentre ci prova la banda
+riavvia, o passa un disturbo — come fanno le cuffie quando le riaccendi: ogni
+mezzo secondo all'inizio, poi sempre più di rado, senza che nessuno prema
+niente. Mentre ci prova la banda
 in alto diventa gialla e lo scrive; **ANNULLA RICONNESSIONE** la ferma, e
 **SCOLLEGA** la spegne (la pagina non riapre mai un collegamento chiuso a mano).
+Nel pannello Diagnostica si legge **quanto è durata l'ultima interruzione**,
+che è il modo di sapere se la riconnessione è veloce come si vorrebbe.
 Dopo un **ricaricamento della pagina**, invece, riprendere la scheda richiede un
 click dove il browser non ha `getDevices()`: è una regola di Web Bluetooth, e la
 pagina lo dice invece di provarci per sempre.

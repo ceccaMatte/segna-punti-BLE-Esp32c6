@@ -19,15 +19,25 @@ afterEach(() => {
 describe('quanto si aspetta fra un tentativo e l\'altro', () => {
   it('il primo tentativo e\' il piu\' vicino', () => {
     expect(retryDelayMs(0)).toBe(RETRY_DELAYS_MS[0]);
-    expect(retryDelayMs(0)).toBeLessThan(retryDelayMs(1));
+    expect(retryDelayMs(0)).toBeLessThanOrEqual(retryDelayMs(8));
   });
 
   it('i tempi si allargano ma non all\'infinito', () => {
-    expect(retryDelayMs(1)).toBe(2000);
-    expect(retryDelayMs(2)).toBe(5000);
-    expect(retryDelayMs(3)).toBe(10000);
-    expect(retryDelayMs(4)).toBe(15000);
-    expect(retryDelayMs(50)).toBe(15000);
+    expect(retryDelayMs(1)).toBe(500);
+    expect(retryDelayMs(2)).toBe(1000);
+    expect(retryDelayMs(4)).toBe(2000);
+    expect(retryDelayMs(6)).toBe(3000);
+    expect(retryDelayMs(7)).toBe(5000);
+    expect(retryDelayMs(8)).toBe(8000);
+    expect(retryDelayMs(50)).toBe(8000);
+  });
+
+  it('l\'inizio e\' fitto: la scheda che si riavvia torna in due secondi', () => {
+    /* Cinque tentativi entro i primi due secondi: e' la finestra in cui la
+       scheda si riavvia, e va coperta tentando spesso, non aspettando. */
+    expect(retryDelayMs(0) + retryDelayMs(1) + retryDelayMs(2) + retryDelayMs(3)).toBeLessThanOrEqual(
+      3000,
+    );
   });
 
   it('un conto senza senso non fa saltare niente', () => {
@@ -51,24 +61,30 @@ describe('il giro dei tentativi', () => {
     reconnector.start(true);
     expect(attempts).toBe(1);
 
-    await vi.advanceTimersByTimeAsync(999);
+    await vi.advanceTimersByTimeAsync(499);
     expect(attempts).toBe(1);
 
     await vi.advanceTimersByTimeAsync(1);
     expect(attempts).toBe(2);
 
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(500);
     expect(attempts).toBe(3);
 
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(attempts).toBe(4);
-
-    await vi.advanceTimersByTimeAsync(10000);
+    await vi.advanceTimersByTimeAsync(2000);
     expect(attempts).toBe(5);
 
-    /* Da qui in avanti sempre allo stesso passo, per quanto si aspetti. */
-    await vi.advanceTimersByTimeAsync(15000 * 4);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(attempts).toBe(7);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(attempts).toBe(8);
+
+    await vi.advanceTimersByTimeAsync(5000);
     expect(attempts).toBe(9);
+
+    /* Da qui in avanti sempre allo stesso passo, per quanto si aspetti. */
+    await vi.advanceTimersByTimeAsync(8000 * 3);
+    expect(attempts).toBe(12);
   });
 
   it('dopo una caduta si aspetta un momento prima di riprovare', async () => {
@@ -88,7 +104,10 @@ describe('il giro dei tentativi', () => {
     reconnector.start(false);
     expect(attempts).toBe(0);
 
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(attempts).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(1);
     expect(attempts).toBe(1);
   });
 
@@ -105,9 +124,9 @@ describe('il giro dei tentativi', () => {
     });
 
     reconnector.start(false);
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(500);
     await vi.advanceTimersByTimeAsync(1000);
-    await vi.advanceTimersByTimeAsync(2000);
-    await vi.advanceTimersByTimeAsync(5000);
     expect(attempts).toBe(3);
 
     await vi.advanceTimersByTimeAsync(120000);
@@ -199,9 +218,9 @@ describe('il giro dei tentativi', () => {
     });
 
     reconnector.start(false);
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(500);
     await vi.advanceTimersByTimeAsync(1000);
-    await vi.advanceTimersByTimeAsync(2000);
-    await vi.advanceTimersByTimeAsync(5000);
     expect(attempts).toBe(3);
 
     reconnector.start(false);
@@ -224,7 +243,7 @@ describe('il giro dei tentativi', () => {
     reconnector.start(true);
     expect(attempts).toBe(1);
 
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(500);
     expect(attempts).toBe(2);
   });
 });

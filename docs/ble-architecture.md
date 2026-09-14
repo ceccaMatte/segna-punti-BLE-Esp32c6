@@ -263,9 +263,22 @@ commissioning*, insieme al piedino.
 
 La scheda si riavvia — per un reset, per una riflasha, per un disturbo — e il
 collegamento cade da solo. La pagina non aspetta un click: **riprova da sola**,
-subito e poi sempre piu' di rado, un secondo, due, cinque, dieci, quindici, e
-poi ogni quindici secondi finche' non riesce o finche' qualcuno non le dice di
-smettere.
+subito e poi sempre piu' di rado, mezzo secondo, mezzo, uno, uno, due, due, tre,
+cinque, otto, e poi ogni otto secondi finche' non riesce o finche' qualcuno non
+le dice di smettere.
+
+L'inizio fitto non e' un dettaglio: una scheda che si riavvia torna in piedi in
+un paio di secondi, e per prenderla in quel momento bisogna tentare spesso, non
+aspettare. Un tentativo che non riceve risposta viene abbandonato dopo **cinque
+secondi** — altrimenti un `connect()` in sospeso bloccherebbe la scala proprio
+nel momento in cui serve che vada avanti.
+
+> Il tempo che la pagina non puo' togliere e' quello che ci mette il computer ad
+> **accorgersi** che la scheda non c'e' piu': dopo un riavvio il collegamento
+> muore senza avvisare, e il sistema se ne accorge allo scadere del tempo di
+> supervisione del Bluetooth, che e' di qualche secondo. Da li' in avanti,
+> pero', la strada e' breve: nel pannello Diagnostica si legge quanto e' durata
+> l'ultima interruzione.
 
 E' lo stesso comportamento di un paio di cuffie: le riaccendi e si ricollegano
 all'ultimo telefono senza che nessuno apra un elenco. Due cose che ne

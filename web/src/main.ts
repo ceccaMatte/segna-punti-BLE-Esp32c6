@@ -111,12 +111,14 @@ const connection = new ConnectionPanel(
 const client = new PadelBleClient({
   onConnected: () => {
     message = null;
+    /* Se prima c'era stata un'interruzione, si sa quanto e' durata. */
+    diagnostics.noteReconnect(Date.now());
     /* Il collegamento c'e': il conto dei tentativi riparte da zero. */
     autoReconnect.connected();
     render();
   },
   onDisconnected: () => {
-    diagnostics.noteDisconnect();
+    diagnostics.noteDisconnect(Date.now());
     streaming = false;
 
     /*
