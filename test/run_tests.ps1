@@ -3,9 +3,14 @@
     Compila ed esegue i test host della logica pura del segnapunti padel.
 
 .DESCRIPTION
-    I moduli match, history, button e controller non hanno dipendenze da
-    ESP-IDF, quindi si compilano ed eseguono sul PC. Cosi' i bug del regolamento
-    non si mescolano a quelli del display o del cablaggio.
+    I moduli puri - le regole del gioco, i gesti, il disegno, il protocollo -
+    non hanno dipendenze da ESP-IDF, quindi si compilano ed eseguono sul PC.
+    Cosi' i bug del regolamento non si mescolano a quelli del display o del
+    cablaggio.
+
+    L'elenco qui sotto deve combaciare con PADEL_LOGIC_SOURCES in
+    main\CMakeLists.txt: sono la stessa divisione scritta in due posti, ed e'
+    l'unico posto in cui il progetto si ripete.
 
     Serve un compilatore C nativo (gcc o clang). Il toolchain RISC-V di ESP-IDF
     non va bene: genera eseguibili per ESP32, non per Windows.
@@ -39,36 +44,38 @@ $SrcDir     = Join-Path $ProjectDir 'main'
 $OutExe     = Join-Path $TestDir 'padel_tests.exe'
 
 $sources = @(
-    (Join-Path $SrcDir  'match.c'),
-    (Join-Path $SrcDir  'history.c'),
-    (Join-Path $SrcDir  'button.c'),
-    (Join-Path $SrcDir  'controller.c'),
-    (Join-Path $SrcDir  'font.c'),
-    (Join-Path $SrcDir  'gfx.c'),
-    (Join-Path $SrcDir  'dirty.c'),
-    (Join-Path $SrcDir  'ui_view.c'),
-    (Join-Path $SrcDir  'led_anim.c'),
-    (Join-Path $SrcDir  'ble_protocol.c'),
-    (Join-Path $SrcDir  'device_identity.c'),
-    (Join-Path $SrcDir  'hold_gesture.c'),
-    (Join-Path $SrcDir  'score_state_adapter.c'),
-    (Join-Path $SrcDir  'commissioning_state.c'),
+    (Join-Path $SrcDir 'app/timing.c'),
+    (Join-Path $SrcDir 'game/match.c'),
+    (Join-Path $SrcDir 'game/history.c'),
+    (Join-Path $SrcDir 'game/controller.c'),
+    (Join-Path $SrcDir 'game/score_state_adapter.c'),
+    (Join-Path $SrcDir 'input/button.c'),
+    (Join-Path $SrcDir 'input/hold_gesture.c'),
+    (Join-Path $SrcDir 'ui/font.c'),
+    (Join-Path $SrcDir 'ui/gfx.c'),
+    (Join-Path $SrcDir 'ui/dirty.c'),
+    (Join-Path $SrcDir 'ui/ui_view.c'),
+    (Join-Path $SrcDir 'board/led_anim.c'),
+    (Join-Path $SrcDir 'link/ble_protocol.c'),
+    (Join-Path $SrcDir 'link/device_identity.c'),
+    (Join-Path $SrcDir 'link/commissioning_state.c'),
     (Join-Path $TestDir 'test_util.c'),
     (Join-Path $TestDir 'test_main.c'),
-    (Join-Path $TestDir 'test_match.c'),
-    (Join-Path $TestDir 'test_button.c'),
-    (Join-Path $TestDir 'test_controller.c'),
-    (Join-Path $TestDir 'test_font.c'),
-    (Join-Path $TestDir 'test_gfx.c'),
-    (Join-Path $TestDir 'test_dirty.c'),
-    (Join-Path $TestDir 'test_ui_view.c'),
-    (Join-Path $TestDir 'test_layout.c'),
-    (Join-Path $TestDir 'test_led_anim.c'),
-    (Join-Path $TestDir 'test_ble_protocol.c'),
-    (Join-Path $TestDir 'test_device_identity.c'),
-    (Join-Path $TestDir 'test_hold_gesture.c'),
-    (Join-Path $TestDir 'test_score_state_adapter.c'),
-    (Join-Path $TestDir 'test_commissioning_state.c')
+    (Join-Path $TestDir 'app/test_timing.c'),
+    (Join-Path $TestDir 'game/test_match.c'),
+    (Join-Path $TestDir 'game/test_controller.c'),
+    (Join-Path $TestDir 'game/test_score_state_adapter.c'),
+    (Join-Path $TestDir 'input/test_button.c'),
+    (Join-Path $TestDir 'input/test_hold_gesture.c'),
+    (Join-Path $TestDir 'ui/test_font.c'),
+    (Join-Path $TestDir 'ui/test_gfx.c'),
+    (Join-Path $TestDir 'ui/test_dirty.c'),
+    (Join-Path $TestDir 'ui/test_ui_view.c'),
+    (Join-Path $TestDir 'ui/test_layout.c'),
+    (Join-Path $TestDir 'board/test_led_anim.c'),
+    (Join-Path $TestDir 'link/test_ble_protocol.c'),
+    (Join-Path $TestDir 'link/test_device_identity.c'),
+    (Join-Path $TestDir 'link/test_commissioning_state.c')
 )
 
 foreach ($source in $sources) {
@@ -121,12 +128,15 @@ Write-Host "Compilatore : $compiler" -ForegroundColor Cyan
 Write-Host "Sorgenti    : $SrcDir" -ForegroundColor Cyan
 Write-Host ''
 
+$includeDirs = @('app', 'game', 'input', 'ui', 'link', 'board') |
+    ForEach-Object { Join-Path $SrcDir $_ }
+
 $compileArgs = @(
     '-std=c11',
     '-Wall',
     '-Wextra',
-    '-O1',
-    '-I', $SrcDir,
+    '-O1'
+) + ($includeDirs | ForEach-Object { @('-I', $_) }) + @(
     '-I', $TestDir,
     '-o', $OutExe
 ) + $sources

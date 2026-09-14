@@ -12,6 +12,7 @@ int main(void)
     printf("\nTest host della logica pura del segnapunti padel\n");
     printf("Nessun hardware richiesto.\n\n");
 
+    test_timing_all();
     test_match_all();
     test_button_all();
     test_controller_all();

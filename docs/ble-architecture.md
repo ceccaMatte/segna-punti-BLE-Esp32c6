@@ -48,21 +48,22 @@ possono provare sul computer e quelli che parlano con l'hardware.
 
 | Modulo | Responsabilita' |
 |---|---|
-| `ble_protocol` | UUID, opcode, versioni, disposizione dei byte, codifica e decodifica |
-| `score_state_adapter` | da `MatchState` al pacchetto: sola lettura, nessun calcolo |
-| `commissioning_state` | la macchina a stati dell'associazione: finestra, token, esiti |
-| `device_identity` | dall'indirizzo della scheda al nome breve e al nome annunciato |
-| `hold_gesture` | riconosce il piedino tenuto basso per tre secondi (una volta sola) |
+| `link/ble_protocol` | UUID, opcode, versioni, disposizione dei byte, codifica e decodifica |
+| `game/score_state_adapter` | da `MatchState` al pacchetto: sola lettura, nessun calcolo |
+| `link/commissioning_state` | la macchina a stati dell'associazione: finestra, token, esiti |
+| `link/device_identity` | dall'indirizzo della scheda al nome breve e al nome annunciato |
+| `input/hold_gesture` | riconosce il piedino tenuto basso per tre secondi (una volta sola) |
 
 ### Hardware e sistema
 
 | Modulo | Responsabilita' |
 |---|---|
-| `ble_gatt` | NimBLE: servizio GATT, annuncio, connessioni, notifiche |
-| `nvs_store` | l'unica cosa scritta in memoria permanente: il token |
-| `commissioning_manager` | la regia: piedino, memoria, stato, radio, schermata |
-| `commissioning_ui` | la schermata di commissioning sul display |
-| `ble_score_service` | il punto in cui il punteggio incontra la radio |
+| `link/ble_gatt` | NimBLE: servizio GATT, annuncio, connessioni, notifiche |
+| `link/nvs_store` | l'unica cosa scritta in memoria permanente: il token |
+| `link/commissioning_pin` | il piedino che apre la finestra, e i suoi cambiamenti a video |
+| `link/commissioning_manager` | la regia: piedino, memoria, stato, radio |
+| `ui/commissioning_ui` | la schermata di commissioning sul display |
+| `link/ble_score_service` | il punto in cui il punteggio incontra la radio |
 
 Fuori da `ble_score_service` non c'e' nessuna chiamata al Bluetooth: e' l'unico
 punto di contatto, ed e' voluto. Se un domani si cambia protocollo o trasporto,

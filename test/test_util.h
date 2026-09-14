@@ -54,6 +54,7 @@ void test_end(const char *name);
 int test_summary(void);
 
 /* Suite, implementate nei rispettivi file. */
+void test_timing_all(void);
 void test_match_all(void);
 void test_button_all(void);
 void test_controller_all(void);

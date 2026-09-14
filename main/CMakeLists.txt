@@ -1,43 +1,58 @@
 # Segnapunti padel.
 #
-# La divisione importante e' fra i moduli che sanno cos'e' un ESP32 e quelli che
-# non lo sanno. I secondi (match, history, button, controller, font, gfx, dirty,
-# ui_view, led_anim, ble_protocol, device_identity, hold_gesture,
-# score_state_adapter, commissioning_state) si compilano anche su un computer
-# normale: e' li' che vengono provati, con test\run_tests.ps1, senza scheda
+# I sorgenti sono divisi per ruolo:
+#
+#   app/    il ciclo principale e le sue operazioni, una per file
+#   game/   le regole del gioco
+#   input/  i gesti del pulsante
+#   ui/     il disegno sullo schermo
+#   link/   Bluetooth, protocollo e associazione
+#   board/  l'hardware della scheda: schermo, LED, piedini
+#
+# La divisione che conta davvero e' pero' un'altra, ed e' dentro queste cartelle:
+# i moduli che non sanno cos'e' un ESP32 si compilano anche su un computer
+# normale, ed e' li' che vengono provati, con test\run_tests.ps1, senza scheda
 # collegata. Restano in questo elenco perche' servono anche al programma che
 # gira sul chip.
 #
-# Chi parla davvero con l'hardware: ui.c, display.c, rgb_led.c, ble_gatt.c,
-# nvs_store.c, commissioning_manager.c, commissioning_ui.c, ble_score_service.c.
+# La lista PADEL_LOGIC_SOURCES e' la fonte di verita' di quella divisione: un
+# modulo che entra li' va aggiunto anche a test\run_tests.ps1, che compila
+# esattamente quelli.
 
 set(PADEL_LOGIC_SOURCES
-    "match.c"
-    "history.c"
-    "button.c"
-    "controller.c"
-    "font.c"
-    "gfx.c"
-    "dirty.c"
-    "ui_view.c"
-    "led_anim.c"
-    "ble_protocol.c"
-    "device_identity.c"
-    "hold_gesture.c"
-    "score_state_adapter.c"
-    "commissioning_state.c"
+    "game/match.c"
+    "game/history.c"
+    "game/controller.c"
+    "game/score_state_adapter.c"
+    "input/button.c"
+    "input/hold_gesture.c"
+    "ui/font.c"
+    "ui/gfx.c"
+    "ui/dirty.c"
+    "ui/ui_view.c"
+    "board/led_anim.c"
+    "link/ble_protocol.c"
+    "link/device_identity.c"
+    "link/commissioning_state.c"
+    "app/timing.c"
 )
 
 set(PADEL_DEVICE_SOURCES
-    "ui.c"
-    "display.c"
-    "rgb_led.c"
-    "ble_gatt.c"
-    "nvs_store.c"
-    "commissioning_manager.c"
-    "commissioning_ui.c"
-    "ble_score_service.c"
-    "gpio_scan.c"
+    "app/app.c"
+    "app/banner.c"
+    "app/gestures.c"
+    "app/indicators.c"
+    "app/screens.c"
+    "ui/ui.c"
+    "ui/commissioning_ui.c"
+    "board/display.c"
+    "board/rgb_led.c"
+    "board/gpio_scan.c"
+    "link/ble_gatt.c"
+    "link/nvs_store.c"
+    "link/commissioning_pin.c"
+    "link/commissioning_manager.c"
+    "link/ble_score_service.c"
 )
 
 # Serve il driver del display (che a sua volta vuole SPI e GPIO), quello della
@@ -50,7 +65,7 @@ idf_component_register(SRCS
                        ${PADEL_LOGIC_SOURCES}
                        ${PADEL_DEVICE_SOURCES}
                        "main.c"
-                       INCLUDE_DIRS "."
+                       INCLUDE_DIRS "." "app" "game" "input" "ui" "link" "board"
                        REQUIRES esp_driver_gpio esp_driver_spi esp_driver_ledc esp_driver_rmt esp_timer esp_lcd esp_hw_support bt nvs_flash)
 
 # Le scelte fatte da menuconfig arrivano ai moduli puri come costanti di

@@ -118,36 +118,42 @@ Un solo senso di marcia. Nessuno risale la catena.
 
 | Modulo | Cosa fa | Sa cosa è un ESP32? |
 |---|---|---|
-| `match` | le regole del padel | no |
-| `history` | le azioni annullabili | no |
-| `button` | riconosce i gesti dal livello del piedino | no |
-| `controller` | traduce i gesti in azioni, gestisce la fine partita | no |
-| `font` | tabelle dei glifi e scelta del carattere | no |
-| `gfx` | forme e testo su un buffer di pixel | no |
-| `dirty` | unisce le zone da ridisegnare | no |
-| `ui_view` | cosa va mostrato e cosa è cambiato | no |
-| `palette` | i colori delle due squadre, per schermo e LED | no |
-| `led_anim` | lo spettacolo di luci e che colore lasciare acceso | no |
-| `ble_protocol` | UUID, opcode e disposizione dei byte dei pacchetti | no |
-| `score_state_adapter` | trasforma il punteggio nel pacchetto da spedire | no |
-| `commissioning_state` | la macchina a stati dell'associazione | no |
-| `hold_gesture` | riconosce il piedino tenuto basso per tre secondi | no |
-| `device_identity` | dall'indirizzo della scheda al suo nome breve | no |
-| `ui` | come si disegna la schermata | solo per la larghezza |
-| `commissioning_ui` | come si disegna la schermata di commissioning | solo per la larghezza |
-| `display` | bus SPI, controller ST7789, retroilluminazione | sì |
-| `rgb_led` | il LED di bordo, WS2812B sul periferico RMT | sì |
-| `ble_gatt` | NimBLE: servizio, annuncio, connessioni, notifiche | sì |
-| `nvs_store` | il token di associazione, l'unica cosa scritta in memoria | sì |
-| `commissioning_manager` | la regia del commissioning | sì |
-| `ble_score_service` | il punto in cui il punteggio incontra la radio | sì |
-| `rgb_led` | il LED di bordo, WS2812B sul periferico RMT | sì |
-| `main` | ciclo principale | sì |
+| `app/timing` | il tempo che passa, misurato invece che dato per scontato | no |
+| `game/match` | le regole del padel | no |
+| `game/history` | le azioni annullabili | no |
+| `game/controller` | traduce i gesti in azioni, gestisce la fine partita | no |
+| `game/score_state_adapter` | trasforma il punteggio nel pacchetto da spedire | no |
+| `input/button` | riconosce i gesti dal livello del piedino | no |
+| `input/hold_gesture` | riconosce il piedino tenuto basso | no |
+| `ui/font` | tabelle dei glifi e scelta del carattere | no |
+| `ui/gfx` | forme e testo su un buffer di pixel | no |
+| `ui/dirty` | unisce le zone da ridisegnare | no |
+| `ui/ui_view` | cosa va mostrato e cosa è cambiato | no |
+| `ui/palette` | i colori delle due squadre, per schermo e LED | no |
+| `board/led_anim` | lo spettacolo di luci e che colore lasciare acceso | no |
+| `link/ble_protocol` | UUID, opcode e disposizione dei byte dei pacchetti | no |
+| `link/device_identity` | dall'indirizzo della scheda al suo nome breve | no |
+| `link/commissioning_state` | la macchina a stati dell'associazione | no |
+| `ui/ui` | come si disegna la schermata | solo per la larghezza |
+| `ui/commissioning_ui` | come si disegna la schermata di commissioning | solo per la larghezza |
+| `board/display` | bus SPI, controller ST7789, retroilluminazione | sì |
+| `board/rgb_led` | il LED di bordo, WS2812B sul periferico RMT | sì |
+| `board/gpio_scan` | la diagnostica dei piedini, da menuconfig | sì |
+| `link/ble_gatt` | NimBLE: servizio, annuncio, connessioni, notifiche | sì |
+| `link/nvs_store` | il token di associazione, l'unica cosa scritta in memoria | sì |
+| `link/commissioning_pin` | il piedino tenuto basso, e i suoi cambiamenti | sì |
+| `link/commissioning_manager` | la regia del commissioning | sì |
+| `link/ble_score_service` | il punto in cui il punteggio incontra la radio | sì |
+| `app/app` | l'avvio e il ciclo | sì |
+| `app/banner` | il cartello di avvio sul monitor seriale | sì |
+| `app/gestures` | legge il pulsante e porta il gesto a destinazione | sì |
+| `app/indicators` | il LED: reagisce a quello che è appena successo | sì |
+| `app/screens` | cosa mostrare sullo schermo, fra le due schermate | sì |
 
-Gli undici moduli senza ESP32 si compilano anche su PC. È questa separazione
-che rende verificabile quello che altrimenti si vedrebbe solo guardando lo
-schermo: perfino lo spettacolo di luci, che sul PC si guarda istante per
-istante invece di aspettare che capiti il punto giusto.
+Tutti i moduli con «no» nell'ultima colonna si compilano anche su PC. È questa
+separazione che rende verificabile quello che altrimenti si vedrebbe solo
+guardando lo schermo: perfino lo spettacolo di luci, che sul PC si guarda
+istante per istante invece di aspettare che capiti il punto giusto.
 
 ---
 
@@ -416,24 +422,44 @@ test-Deep-seek/
 ├── sdkconfig.defaults          # target, console, flash, Bluetooth
 ├── .vscode/
 │   └── c_cpp_properties.json   # IntelliSense via build/compile_commands.json
-├── main/                       # il firmware
-│   ├── match.c · history.c         # le regole del padel             (puri)
-│   ├── button.c · controller.c     # gesti e fasi della partita      (puri)
-│   ├── ui_view.c · gfx.c · font.c  # schermata e caratteri           (puri)
-│   ├── led_anim.c                  # lo spettacolo di luci           (puro)
-│   ├── ble_protocol.c              # UUID, opcode, pacchetti         (puro)
-│   ├── score_state_adapter.c       # dal punteggio al pacchetto      (puro)
-│   ├── commissioning_state.c       # macchina a stati dell'associazione (pura)
-│   ├── hold_gesture.c              # il piedino tenuto basso          (puro)
-│   ├── device_identity.c           # il nome della scheda            (puro)
-│   ├── ui.c · display.c            # disegno e controller ST7789
-│   ├── rgb_led.c                   # LED di bordo, WS2812B via RMT
-│   ├── ble_gatt.c                  # NimBLE: servizio, annuncio, notifiche
-│   ├── nvs_store.c                 # il token in memoria permanente
-│   ├── commissioning_manager.c · commissioning_ui.c
-│   ├── ble_score_service.c         # pubblica lo stato sulla radio
-│   └── main.c                      # il ciclo principale
+├── main/                       # il firmware, diviso per ruolo
+│   ├── main.c                      # punto di ingresso: due righe
+│   ├── app/                        # il ciclo, e le sue operazioni una per file
+│   │   ├── app.c                   # avvio e ciclo principale
+│   │   ├── banner.c                # il cartello di avvio
+│   │   ├── gestures.c              # il pulsante, e dove va il gesto
+│   │   ├── indicators.c            # il LED di bordo
+│   │   ├── screens.c               # cosa si vede sullo schermo
+│   │   └── timing.c                # il tempo che passa               (puro)
+│   ├── game/                       # le regole del padel
+│   │   ├── match.c · history.c · controller.c                 (puri)
+│   │   └── score_state_adapter.c   # dal punteggio al pacchetto    (puro)
+│   ├── input/                      # i gesti
+│   │   ├── button.c                                           (puro)
+│   │   └── hold_gesture.c          # il piedino tenuto basso      (puro)
+│   ├── ui/                         # il disegno
+│   │   ├── ui_view.c · gfx.c · font.c · dirty.c · palette.h   (puri)
+│   │   ├── ui.c                    # come si disegna la partita
+│   │   └── commissioning_ui.c      # come si disegna il commissioning
+│   ├── link/                       # Bluetooth, protocollo, associazione
+│   │   ├── ble_protocol.c          # UUID, opcode, pacchetti       (puro)
+│   │   ├── device_identity.c       # il nome della scheda          (puro)
+│   │   ├── commissioning_state.c   # la macchina di stato          (pura)
+│   │   ├── ble_gatt.c              # NimBLE: servizio, annuncio, notifiche
+│   │   ├── nvs_store.c             # il token in memoria permanente
+│   │   ├── commissioning_pin.c     # il piedino che apre la finestra
+│   │   ├── commissioning_manager.c # la regia del commissioning
+│   │   └── ble_score_service.c     # pubblica lo stato sulla radio
+│   └── board/                      # l'hardware della scheda
+│       ├── board.h                 # la piedinatura
+│       ├── display.c               # controller ST7789
+│       ├── rgb_led.c               # LED di bordo, WS2812B via RMT
+│       ├── led_anim.c              # lo spettacolo di luci         (puro)
+│       └── gpio_scan.c             # la diagnostica dei piedini
 ├── test/                       # prove host: .\test\run_tests.ps1
+│   ├── app/ · game/ · input/ · ui/ · link/ · board/   # una cartella per ruolo
+│   ├── test_main.c · test_util.c   # il motore dei test
+│   └── run_tests.ps1
 ├── web/                        # la pagina web (Vite + TypeScript)
 ├── scripts/flash.ps1           # build / flash / verify / monitor
 ├── docs/HARDWARE.md            # piedinatura verificata
@@ -450,9 +476,9 @@ test-Deep-seek/
 
 Il segnapunti è scritto e verificato per la **Waveshare ESP32-C6-LCD-1.47**, e
 non è previsto il supporto ad altre schede: la piedinatura sta in
-`main/board.h`, il target è dichiarato in `sdkconfig.defaults`, quindi non serve
-eseguire `idf.py set-target`. Compilando per un altro chip, `main.c` se ne
-accorge con un `#error` prima di provare a leggere un piedino.
+`main/board/board.h`, il target è dichiarato in `sdkconfig.defaults`, quindi non
+serve eseguire `idf.py set-target`. Compilando per un altro chip, `app/app.c` se
+ne accorge con un `#error` prima di provare a leggere un piedino.
 
 ---
 
@@ -526,17 +552,20 @@ I (241) ble: in annuncio come PADEL_SCORE_A31F
 
 ## Come funziona
 
-`main/main.c` è un ciclo da cinque millisecondi che non prende nessuna decisione
-sul padel. A ogni giro:
+`main/app/app.c` è un ciclo da cinque millisecondi che non prende nessuna
+decisione sul padel. A ogni giro, nell'ordine, e ognuna affidata al suo modulo:
 
-1. legge il pulsante di BOOT e lo passa al `controller`, che traduce i gesti in
-   azioni secondo la fase della partita;
-2. fa avanzare il timer della schermata del vincitore;
-3. guarda il piedino di commissioning e lascia lavorare
-   `commissioning_manager`;
-4. chiede a `ble_score_service` se il punteggio è cambiato e, se lo è, lo
-   pubblica sulla radio;
-5. disegna: la schermata di commissioning se è aperta, altrimenti il punteggio.
+1. `gestures.c` legge il pulsante di BOOT e porta il gesto dove deve andare: al
+   `controller`, che lo traduce in un'azione secondo la fase della partita;
+2. `controller.c` fa avanzare il tempo della partita (la schermata del vincitore
+   e il suo riavvio automatico);
+3. `indicators.c` fa reagire il LED a quello che è appena successo;
+4. `link/commissioning_pin.c` guarda il piedino di commissioning e lo racconta
+   al `commissioning_manager`;
+5. `link/ble_score_service.c` pubblica lo stato della partita sulla radio, se è
+   cambiato o se è ora di farsi sentire;
+6. `screens.c` disegna: la schermata di commissioning se è aperta, altrimenti il
+   punteggio.
 
 Il motore del punteggio non sa che esiste un display, un pulsante o una radio:
 riceve "punto a NOI" e aggiorna lo stato. Tutto il resto guarda.
