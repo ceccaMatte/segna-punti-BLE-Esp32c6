@@ -68,15 +68,9 @@ uint16_t font_measure_text(const font_t *f, const char *text)
     return (width > (uint32_t)UINT16_MAX) ? (uint16_t)UINT16_MAX : (uint16_t)width;
 }
 
-const font_t *font_pick_for_score(const char *text, uint16_t max_width)
+const font_t *font_pick_for_panel(const char *text, uint16_t max_width)
 {
-    const font_t *candidate = font_get(FONT_ID_SCORE);
-
-    if (font_measure_text(candidate, text) <= max_width) {
-        return candidate;
-    }
-
-    candidate = font_get(FONT_ID_SCORE_S);
+    const font_t *candidate = font_get(FONT_ID_SCORE_S);
 
     if (font_measure_text(candidate, text) <= max_width) {
         return candidate;

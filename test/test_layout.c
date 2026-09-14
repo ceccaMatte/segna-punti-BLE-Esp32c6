@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file test_layout.c
  * @brief Test che il testo entri davvero dentro i riquadri previsti.
  *
@@ -30,7 +30,7 @@ static const char *GAME_SCORES[] = { "0", "15", "30", "40", "AD" };
 /** Vero se il testo entra davvero nello spazio disponibile. */
 static bool score_fits(const char *text)
 {
-    const font_t *f = font_pick_for_score(text, UI_SCORE_MAX_W);
+    const font_t *f = font_pick_for_panel(text, UI_SCORE_MAX_W);
     return font_measure_text(f, text) <= UI_SCORE_MAX_W;
 }
 
@@ -68,36 +68,40 @@ static void test_punteggi_entrano(void)
 
 static void test_punteggio_leggibile(void)
 {
-    test_begin("i punteggi che capitano davvero restano nella cifra grande");
+    test_begin("il punteggio del pannello resta alla misura di AD");
 
     /*
-     * Non basta che il testo entri: deve entrare nel font *grande*, altrimenti
-     * il punteggio rimpicciolisce proprio nei momenti che contano. "40" e "AD"
-     * sono i due casi limite del gioco normale.
+     * Non basta che il testo entri: deve entrare in modo da non sembrare
+     * schiacciato contro la cornice. Il livello intermedio lascia un margine
+     * decente anche con il punteggio piu' largo; il livello massimo no, ed e'
+     * per questo che non viene mai scelto qui.
      */
+    const font_t *medio = font_get(FONT_ID_SCORE_S);
     const font_t *grande = font_get(FONT_ID_SCORE);
 
-    CHECK(font_pick_for_score("0", UI_SCORE_MAX_W) == grande);
-    CHECK(font_pick_for_score("15", UI_SCORE_MAX_W) == grande);
-    CHECK(font_pick_for_score("30", UI_SCORE_MAX_W) == grande);
-    CHECK(font_pick_for_score("40", UI_SCORE_MAX_W) == grande);
+    const char *scores[] = { "0", "15", "30", "40", "AD" };
+    for (size_t i = 0; i < sizeof(scores) / sizeof(scores[0]); ++i) {
+        CHECK(font_pick_for_panel(scores[i], UI_SCORE_MAX_W) == medio);
+    }
 
-    /* "AD" e' la stringa piu' larga del gioco: due maiuscole, piu' larghe di
-       qualunque coppia di cifre. Non entra nel font grande a nessuna larghezza
-       di pannello ragionevole, ed e' per questo che esiste il livello
-       intermedio. */
-    CHECK(font_pick_for_score("AD", UI_SCORE_MAX_W) == font_get(FONT_ID_SCORE_S));
+    /* Il caso peggiore di tutti: "AD" e' piu' largo di qualunque coppia di
+       cifre. Non deve avvicinarsi troppo al bordo. */
+    const int widest = (int)font_measure_text(medio, "AD");
+    CHECK(widest * 10 <= UI_SCORE_MAX_W * 9);   /* entro il 90 per cento */
 
-    /* I punteggi di tie-break a due cifre devono restare grandi: sotto il
-       livello intermedio diventerebbero difficili da leggere. */
+    /* e il livello massimo, se fosse usato, sfonderebbe il margine: e' la
+       ragione per cui e' escluso. */
+    const int too_big = (int)font_measure_text(grande, "40");
+    CHECK(too_big * 10 > UI_SCORE_MAX_W * 9);
+
+    /* i punteggi di tie-break a due cifre devono restare nel livello medio */
     char buffer[UI_SCORE_TEXT_MAX];
     for (int n = 0; n <= 99; ++n) {
         (void)snprintf(buffer, sizeof(buffer), "%d", n);
-        const font_t *f = font_pick_for_score(buffer, UI_SCORE_MAX_W);
-        CHECK(f == grande || f == font_get(FONT_ID_SCORE_S));
+        CHECK(font_pick_for_panel(buffer, UI_SCORE_MAX_W) == medio);
     }
 
-    test_end("i punteggi che capitano davvero restano nella cifra grande");
+    test_end("il punteggio del pannello resta alla misura di AD");
 }
 
 static void test_primo_disegno_copre_tutto(void)
@@ -165,7 +169,7 @@ static void test_cifra_centrata_sta_nel_pannello(void)
 
     for (int n = 0; n <= 999; ++n) {
         (void)snprintf(buffer, sizeof(buffer), "%d", n);
-        const font_t *f = font_pick_for_score(buffer, UI_SCORE_MAX_W);
+        const font_t *f = font_pick_for_panel(buffer, UI_SCORE_MAX_W);
         const int width = (int)font_measure_text(f, buffer);
         const int left = UI_COL_LORO_CX - width / 2;
 
@@ -177,7 +181,7 @@ static void test_cifra_centrata_sta_nel_pannello(void)
 
     /* il pannello di destra e' speculare, ma il conto si fa lo stesso */
     for (size_t i = 0; i < sizeof(GAME_SCORES) / sizeof(GAME_SCORES[0]); ++i) {
-        const font_t *f = font_pick_for_score(GAME_SCORES[i], UI_SCORE_MAX_W);
+        const font_t *f = font_pick_for_panel(GAME_SCORES[i], UI_SCORE_MAX_W);
         const int width = (int)font_measure_text(f, GAME_SCORES[i]);
         const int left = UI_COL_NOI_CX - width / 2;
         CHECK(left >= UI_PANEL_NOI_X + 1);
@@ -245,15 +249,18 @@ static int widest_digit(const font_t *f)
 
 static void test_riquadri_in_basso(void)
 {
-    test_begin("il contenuto dei riquadri GAME e SET sta dentro i riquadri");
+    test_begin("il contenuto della scheda in basso sta dentro la scheda");
 
     const font_t *tiny = font_get(FONT_ID_TINY);
     const font_t *nums = font_get(FONT_ID_SCORE_XS);
 
-    /* etichetta e numeri, uno sotto l'altro, senza toccarsi */
-    const int label_bottom = UI_CARD_LABEL_DY + (int)tiny->cell_height;
-    CHECK(label_bottom <= UI_CARD_VALUE_DY);
-    CHECK(UI_CARD_VALUE_DY + (int)nums->cell_height <= UI_CARD_H);
+    /* le due sezioni sono uguali e stanno una sopra l'altra */
+    CHECK_EQ(UI_CARD_H, UI_CARD_SECTION * 2);
+    CHECK(UI_CARD_SECTION > UI_CARD_VALUE_DY + (int)nums->cell_height);
+
+    /* dentro ogni sezione etichetta e numeri non si toccano */
+    CHECK(UI_CARD_LABEL_DY + (int)tiny->cell_height <= UI_CARD_VALUE_DY);
+    CHECK(UI_CARD_VALUE_DY + (int)nums->cell_height < UI_CARD_SECTION);
 
     CHECK((int)font_measure_text(tiny, "GAME") < UI_CARD_W);
     CHECK((int)font_measure_text(tiny, "SET") < UI_CARD_W);
@@ -279,36 +286,46 @@ static void test_riquadri_in_basso(void)
     CHECK(dash_top >= UI_CARD_VALUE_DY);
     CHECK(dash_top + UI_CARD_DASH_H <= UI_CARD_VALUE_DY + (int)nums->cell_height);
 
-    /* i due riquadri non si toccano */
-    CHECK(UI_GAME_Y + UI_CARD_H < UI_SET_Y);
-    CHECK(UI_SET_Y + UI_CARD_H <= UI_SCREEN_H);
+    /* la riga di separazione cade fra le due sezioni, non dentro */
+    CHECK(UI_CARD_RULE_Y >= UI_CARD_VALUE_DY + (int)nums->cell_height);
+    CHECK(UI_CARD_RULE_Y < UI_CARD_SECTION + UI_CARD_LABEL_DY);
 
-    test_end("il contenuto dei riquadri GAME e SET sta dentro i riquadri");
+    /* la scheda sta dentro lo schermo e sotto i pannelli */
+    CHECK(UI_CARD_Y >= UI_PANEL_Y + UI_PANEL_H);
+    CHECK(UI_CARD_Y + UI_CARD_H <= UI_SCREEN_H);
+    CHECK(UI_CARD_X + UI_CARD_W <= UI_SCREEN_W);
+
+    test_end("il contenuto della scheda in basso sta dentro la scheda");
 }
 
-static void test_emblema(void)
+static void test_pallina(void)
 {
-    test_begin("l'emblema sta fra il titolo e i pannelli");
+    test_begin("la pallina sta fra il titolo e i pannelli");
 
     const font_t *tiny = font_get(FONT_ID_TINY);
     const int title_bottom = UI_HEADER_TEXT_Y + (int)tiny->cell_height;
+    const int ball_top = UI_DIVIDER_CY - UI_BALL_R - 1;
+    const int ball_bottom = UI_DIVIDER_CY + UI_BALL_R + 1;
 
-    CHECK(UI_EMBLEM_TOP > title_bottom);
-    CHECK(UI_EMBLEM_TOP + UI_EMBLEM_H <= UI_PANEL_Y - UI_PANEL_GLOW);
+    /* Il titolo viene disegnato due volte a un pixel di distanza per farlo
+       sembrare in grassetto: il bordo destro cresce di uno, e il test del
+       distintivo ne tiene conto. */
+    CHECK(ball_top > title_bottom);
+    CHECK(ball_bottom <= UI_PANEL_Y - UI_PANEL_GLOW);
 
     /* i due tratti di linea ai lati devono essere lunghi abbastanza da vedersi */
     const int left_x0 = 8;
-    const int left_w = (UI_CENTER_CX - UI_EMBLEM_W / 2 - UI_EMBLEM_GAP) - left_x0;
+    const int left_w = (UI_CENTER_CX - UI_BALL_R - 1 - UI_BALL_GAP) - left_x0;
     CHECK(left_w > 20);
 
-    /* la riga di separazione cade dentro l'emblema, non fuori */
-    CHECK(UI_DIVIDER_CY >= UI_EMBLEM_TOP);
-    CHECK(UI_DIVIDER_CY < UI_EMBLEM_TOP + UI_EMBLEM_H);
+    /* la riga di separazione passa per il centro della pallina */
+    CHECK(UI_DIVIDER_CY > ball_top);
+    CHECK(UI_DIVIDER_CY < ball_bottom);
 
-    /* e l'emblema non finisce sotto il distintivo del tie-break */
-    CHECK(UI_CENTER_CX + UI_EMBLEM_W / 2 < UI_TB_X);
+    /* e la pallina non finisce sotto il distintivo del tie-break */
+    CHECK(UI_CENTER_CX + UI_BALL_R + 1 < UI_TB_X);
 
-    test_end("l'emblema sta fra il titolo e i pannelli");
+    test_end("la pallina sta fra il titolo e i pannelli");
 }
 
 static void test_distintivo_tie_break(void)
@@ -323,11 +340,12 @@ static void test_distintivo_tie_break(void)
     CHECK(UI_TB_X + UI_TB_W <= UI_SCREEN_W);
 
     /*
-     * Il titolo e' centrato. Il suo bordo destro non deve finire sotto il
-     * distintivo, altrimenti quando comincia il tie-break la scritta PADEL
-     * SCORE verrebbe coperta a meta'.
+     * Il titolo e' centrato e disegnato due volte a un pixel di distanza per
+     * farlo sembrare in grassetto: il suo bordo destro effettivo e' quindi piu'
+     * largo di uno. Non deve finire sotto il distintivo, altrimenti quando
+     * comincia il tie-break la scritta verrebbe coperta a meta'.
      */
-    const int title_w = (int)font_measure_text(tiny, "PADEL SCORE");
+    const int title_w = (int)font_measure_text(tiny, "PADEL SCORE") + 1;
     CHECK(UI_CENTER_CX + title_w / 2 < UI_TB_X);
 
     /* il distintivo resta sopra i pannelli e non tocca l'emblema */
@@ -383,7 +401,7 @@ void test_layout_all(void)
     test_cifra_centrata_sta_nel_pannello();
     test_cifra_dentro_la_sua_fascia();
     test_riquadri_in_basso();
-    test_emblema();
+    test_pallina();
     test_nome_squadra_entra();
     test_distintivo_tie_break();
 }

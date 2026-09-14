@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file test_font.c
  * @brief Test host delle tabelle font e della scelta del font del punteggio.
  *
@@ -150,50 +150,59 @@ static void test_misura(void)
 
 static void test_scelta_font(void)
 {
-    test_begin("font_pick_for_score sceglie in base alla larghezza reale");
+    test_begin("font_pick_for_panel sceglie in base alla larghezza reale");
 
-    const font_t *score    = font_get(FONT_ID_SCORE);
-    const font_t *score_s  = font_get(FONT_ID_SCORE_S);
-    const font_t *score_xs = font_get(FONT_ID_SCORE_XS);
+    const font_t *grande   = font_get(FONT_ID_SCORE);
+    const font_t *medio    = font_get(FONT_ID_SCORE_S);
+    const font_t *piccolo  = font_get(FONT_ID_SCORE_XS);
 
-    /* il caso normale: una o due cifre restano nel font grande */
-    CHECK(font_pick_for_score("0", 73) == score);
-    CHECK(font_pick_for_score("8", 73) == score);
-    CHECK(font_pick_for_score("40", 73) == score);
-    CHECK(font_pick_for_score("15", 73) == score);
+    /*
+     * Nel pannello il punteggio non usa mai il livello piu' grande: con due
+     * caratteri riempirebbe il riquadro quasi per intero e sembrerebbe
+     * schiacciato contro la cornice. Quello resta alla schermata del vincitore,
+     * dove c'e' una cifra sola.
+     */
+    CHECK(font_pick_for_panel("0", 73) == medio);
+    CHECK(font_pick_for_panel("8", 73) == medio);
+    CHECK(font_pick_for_panel("40", 73) == medio);
+    CHECK(font_pick_for_panel("15", 73) == medio);
+    CHECK(font_pick_for_panel("AD", 73) == medio);
 
-    /* il vantaggio usa due maiuscole, piu' larghe di due cifre: scende di un
-       livello ma resta perfettamente leggibile */
-    CHECK(font_pick_for_score("AD", 73) == score_s);
-
-    /* tre cifre entrano ancora nel livello intermedio, perche' e' tarato su
-       "444" che e' piu' largo di "AD" */
-    CHECK(font_pick_for_score("102", 73) == score_s);
-    CHECK(font_pick_for_score("444", 73) == score_s);
+    /* tre cifre entrano ancora nel livello intermedio */
+    CHECK(font_pick_for_panel("102", 73) == medio);
+    CHECK(font_pick_for_panel("444", 73) == medio);
 
     /* quattro cifre del tie-break scendono al livello minimo */
-    CHECK(font_pick_for_score("1024", 73) == score_xs);
+    CHECK(font_pick_for_panel("1024", 73) == piccolo);
 
     /* con spazio abbondante non si scende mai di livello */
-    CHECK(font_pick_for_score("102", 1000) == score);
-    CHECK(font_pick_for_score("1024", 1000) == score);
+    CHECK(font_pick_for_panel("102", 1000) == medio);
+    CHECK(font_pick_for_panel("1024", 1000) == medio);
 
     /* il ripiego estremo risponde comunque */
-    CHECK(font_pick_for_score("1234567", 20) == score_xs);
+    CHECK(font_pick_for_panel("1234567", 20) == piccolo);
 
-    /* Nessun punteggio reale deve lasciare il livello grande. Le cifre hanno
-       larghezze diverse: provarle tutte e' l'unico modo di esserne certi. */
+    /* E il livello piu' grande non viene mai scelto, per nessun punteggio
+       reale: e' la promessa che c'e' dietro a tutta questa funzione. */
+    const char *samples[] = { "0", "15", "30", "40", "AD", "102", "1024" };
+    for (size_t i = 0; i < sizeof(samples) / sizeof(samples[0]); ++i) {
+        CHECK(font_pick_for_panel(samples[i], 73) != grande);
+    }
+
+    /* Nessun punteggio reale deve lasciare il livello intermedio. Le cifre
+       hanno larghezze diverse: provarle tutte e' l'unico modo di esserne
+       certi. */
     const char *digits = "0123456789";
     char text[3] = { 0, 0, 0 };
     for (int a = 0; a < 10; ++a) {
         for (int b = 0; b < 10; ++b) {
             text[0] = digits[a];
             text[1] = digits[b];
-            CHECK(font_pick_for_score(text, 73) == score);
+            CHECK(font_pick_for_panel(text, 73) == medio);
         }
     }
 
-    test_end("font_pick_for_score sceglie in base alla larghezza reale");
+    test_end("font_pick_for_panel sceglie in base alla larghezza reale");
 }
 
 static void test_scelta_coerente(void)
@@ -203,7 +212,7 @@ static void test_scelta_coerente(void)
     const char *samples[] = { "0", "15", "40", "AD", "10", "102", "1024", "9999" };
 
     for (size_t i = 0; i < sizeof(samples) / sizeof(samples[0]); i++) {
-        const font_t *picked = font_pick_for_score(samples[i], 73);
+        const font_t *picked = font_pick_for_panel(samples[i], 73);
         const uint16_t width = font_measure_text(picked, samples[i]);
 
         /* l'unica eccezione ammessa e' il livello piu' piccolo, che e' l'ultimo

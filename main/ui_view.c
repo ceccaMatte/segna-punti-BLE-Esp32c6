@@ -169,13 +169,10 @@ uint32_t ui_view_diff(const ui_view_t *previous, const ui_view_t *current)
     }
 
     if (previous->loro_games != current->loro_games ||
-        previous->noi_games != current->noi_games) {
-        mask |= UI_SLOT_BIT(UI_SLOT_GAME);
-    }
-
-    if (previous->loro_sets != current->loro_sets ||
+        previous->noi_games != current->noi_games ||
+        previous->loro_sets != current->loro_sets ||
         previous->noi_sets != current->noi_sets) {
-        mask |= UI_SLOT_BIT(UI_SLOT_SET);
+        mask |= UI_SLOT_BIT(UI_SLOT_CARD);
     }
 
     return mask;
@@ -187,8 +184,7 @@ const char *ui_slot_name(ui_slot_t slot)
     case UI_SLOT_TB:      return "TB";
     case UI_SLOT_LORO:    return "LORO";
     case UI_SLOT_NOI:     return "NOI";
-    case UI_SLOT_GAME:    return "GAME";
-    case UI_SLOT_SET:     return "SET";
+    case UI_SLOT_CARD:    return "GAME E SET";
     case UI_SLOT_OVERLAY: return "VINCITORE";
     default:              return "?";
     }
@@ -212,10 +208,8 @@ gfx_rect_t ui_view_slot_rect(ui_slot_t slot)
         return (gfx_rect_t){ UI_PANEL_NOI_X - UI_PANEL_GLOW, UI_PANEL_Y - UI_PANEL_GLOW,
                              UI_PANEL_W + 2 * UI_PANEL_GLOW, UI_PANEL_H + 2 * UI_PANEL_GLOW };
 
-    case UI_SLOT_GAME:
-        return (gfx_rect_t){ UI_CARD_X, UI_GAME_Y, UI_CARD_W, UI_CARD_H };
-    case UI_SLOT_SET:
-        return (gfx_rect_t){ UI_CARD_X, UI_SET_Y, UI_CARD_W, UI_CARD_H };
+    case UI_SLOT_CARD:
+        return (gfx_rect_t){ UI_CARD_X, UI_CARD_Y, UI_CARD_W, UI_CARD_H };
     case UI_SLOT_OVERLAY:
         return (gfx_rect_t){ 0, 0, UI_SCREEN_W, UI_SCREEN_H };
     default:

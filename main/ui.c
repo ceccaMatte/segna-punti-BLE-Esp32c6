@@ -147,7 +147,7 @@ static void draw_serve_indicator(int cx, bool serving, uint16_t accent)
  */
 static void draw_score(const char *text, int cx)
 {
-    const font_t *f = font_pick_for_score(text, UI_SCORE_MAX_W);
+    const font_t *f = font_pick_for_panel(text, UI_SCORE_MAX_W);
     const int y = UI_SCORE_Y + (UI_SCORE_H - (int)f->cell_height) / 2;
 
     gfx_text_centered(&s_g, f, text, cx, y, COL_TEXT);
@@ -200,23 +200,19 @@ static void draw_panel(const ui_view_t *v, team_t team)
 }
 
 /**
- * Uno dei due riquadri in basso: etichetta sopra, poi i due numeri separati da
- * una barretta.
+ * Una sezione della scheda: etichetta sopra, poi i due numeri separati da una
+ * barretta.
  *
  * I numeri sono centrati come un blocco unico, non allineati alle colonne dei
- * pannelli: e' quello che rende il riquadro leggibile come "3 - 2" invece che
- * come due cifre sparse.
+ * pannelli: e' quello che li fa leggere come "3 - 2" invece che come due cifre
+ * sparse.
  */
-static void draw_card(int card_y, const char *label, uint8_t loro_value, uint8_t noi_value)
+static void draw_card_section(int section_y, const char *label, uint8_t loro_value, uint8_t noi_value)
 {
     const font_t *nums = font_get(FONT_ID_SCORE_XS);
 
-    gfx_fill_rect(&s_g, UI_CARD_X, card_y, UI_CARD_W, UI_CARD_H, COL_BG);
-    gfx_fill_rect_rounded(&s_g, UI_CARD_X, card_y, UI_CARD_W, UI_CARD_H, 10, COL_CARD);
-    gfx_stroke_rect_rounded(&s_g, UI_CARD_X, card_y, UI_CARD_W, UI_CARD_H, 10, 1, COL_CARD_EDGE);
-
     gfx_text_centered(&s_g, font_get(FONT_ID_TINY), label, UI_CENTER_CX,
-                      card_y + UI_CARD_LABEL_DY, COL_LABEL);
+                      section_y + UI_CARD_LABEL_DY, COL_LABEL);
 
     char left_buf[4];
     char right_buf[4];
@@ -227,13 +223,10 @@ static void draw_card(int card_y, const char *label, uint8_t loro_value, uint8_t
     const int w_right = (int)font_measure_text(nums, right);
     const int total = w_left + UI_CARD_DASH_GAP + UI_CARD_DASH_W + UI_CARD_DASH_GAP + w_right;
     const int x0 = UI_CENTER_CX - total / 2;
-    const int value_y = card_y + UI_CARD_VALUE_DY;
+    const int value_y = section_y + UI_CARD_VALUE_DY;
 
     gfx_text(&s_g, nums, left, x0, value_y, COL_LORO);
 
-    /* La barretta sta a meta' altezza delle cifre, non della cella: le cifre
-       non riempiono tutta la cella del font, e allineandola alla cella
-       sembrerebbe piu' bassa. */
     gfx_fill_rect_rounded(&s_g, x0 + w_left + UI_CARD_DASH_GAP,
                           value_y + ((int)nums->cell_height - UI_CARD_DASH_H) / 2,
                           UI_CARD_DASH_W, UI_CARD_DASH_H, 1, COL_DASH);
@@ -241,6 +234,26 @@ static void draw_card(int card_y, const char *label, uint8_t loro_value, uint8_t
     gfx_text(&s_g, nums, right,
              x0 + w_left + UI_CARD_DASH_GAP + UI_CARD_DASH_W + UI_CARD_DASH_GAP,
              value_y, COL_NOI);
+}
+
+/**
+ * La scheda in basso, una sola per i game e per i set.
+ *
+ * Una scheda sola invece di due: il margine che le separava non serviva a
+ * niente, e una riga sottile divide le due sezioni senza spezzare il disegno.
+ */
+static void draw_card(const ui_view_t *v)
+{
+    gfx_fill_rect(&s_g, UI_CARD_X, UI_CARD_Y, UI_CARD_W, UI_CARD_H, COL_BG);
+    gfx_fill_rect_rounded(&s_g, UI_CARD_X, UI_CARD_Y, UI_CARD_W, UI_CARD_H, UI_PANEL_RADIUS, COL_CARD);
+    gfx_stroke_rect_rounded(&s_g, UI_CARD_X, UI_CARD_Y, UI_CARD_W, UI_CARD_H, UI_PANEL_RADIUS, 1,
+                            COL_CARD_EDGE);
+
+    draw_card_section(UI_CARD_Y, "GAME", v->loro_games, v->noi_games);
+    draw_card_section(UI_CARD_Y + UI_CARD_SECTION, "SET", v->loro_sets, v->noi_sets);
+
+    /* La riga che divide le due sezioni, rientrata di poco dai bordi. */
+    gfx_fill_rect(&s_g, UI_CARD_X + 12, UI_CARD_Y + UI_CARD_RULE_Y, UI_CARD_W - 24, 1, COL_DIVIDER);
 }
 
 /** Il distintivo del tie-break, in alto a destra. */
@@ -297,11 +310,8 @@ static void draw_slot(ui_slot_t slot, const ui_view_t *v)
     case UI_SLOT_NOI:
         draw_panel(v, TEAM_US);
         break;
-    case UI_SLOT_GAME:
-        draw_card(UI_GAME_Y, "GAME", v->loro_games, v->noi_games);
-        break;
-    case UI_SLOT_SET:
-        draw_card(UI_SET_Y, "SET", v->loro_sets, v->noi_sets);
+    case UI_SLOT_CARD:
+        draw_card(v);
         break;
     case UI_SLOT_OVERLAY:
         if (v->overlay) {
@@ -318,38 +328,45 @@ static void draw_slot(ui_slot_t slot, const ui_view_t *v)
 /* -------------------------------------------------------------------------- */
 
 /**
- * L'emblema: due racchette con i manici che si incrociano.
+ * La pallina da padel sulla riga di separazione.
  *
- * Le teste sono due sagome arrotondate; i manici sono segmenti orizzontali
- * spostati di un pixel per riga, che e' il modo piu' semplice di disegnare una
- * linea obliqua senza tirarsi dietro tutta la matematica delle rette.
+ * Il riflesso in alto a sinistra e' quello che la fa leggere come una sfera e
+ * non come un semplice pallino: senza, sarebbe un cerchio piatto. E' anche il
+ * motivo per cui non ci sono piu' le racchette incrociate: a questa dimensione
+ * erano due macchie che non si capivano.
  */
-static void draw_emblem(int cx, uint16_t color)
+static void draw_ball(int cx, uint16_t color)
 {
-    const int head_y = UI_EMBLEM_TOP;
+    const uint16_t highlight = mix(color, GFX_RGB(255, 255, 255), 150);
 
-    gfx_fill_rect_rounded(&s_g, cx - 13, head_y, UI_EMBLEM_HEAD_W, UI_EMBLEM_HEAD_H, 5, color);
-    gfx_fill_rect_rounded(&s_g, cx + 2, head_y, UI_EMBLEM_HEAD_W, UI_EMBLEM_HEAD_H, 5, color);
-
-    for (int i = 0; i < UI_EMBLEM_HANDLE; ++i) {
-        const int y = head_y + UI_EMBLEM_HEAD_H + i;
-        gfx_fill_rect(&s_g, cx - 8 + i, y, 3, 1, color);
-        gfx_fill_rect(&s_g, cx + 5 - i, y, 3, 1, color);
-    }
+    /* Un anello appena piu' tenue attorno stacca la pallina dal fondo. */
+    gfx_fill_circle(&s_g, cx, UI_DIVIDER_CY, UI_BALL_R + 1, mix(COL_BG, color, 70));
+    gfx_fill_circle(&s_g, cx, UI_DIVIDER_CY, UI_BALL_R, color);
+    gfx_fill_circle(&s_g, cx - 2, UI_DIVIDER_CY - 2, 2, highlight);
 }
 
 static void draw_static(void)
 {
     gfx_clear(&s_g, COL_BG);
 
-    gfx_text_centered(&s_g, font_get(FONT_ID_TINY), "PADEL SCORE", UI_CENTER_CX, UI_HEADER_TEXT_Y,
-                      COL_LABEL);
+    /*
+     * Il titolo, disegnato due volte a un pixel di distanza.
+     *
+     * Il font piu' adatto non ha un livello piu' pesante, e a questa altezza il
+     * grassetto normale non si distingue. Disegnandolo due volte le aste si
+     * ispessiscono di un pixel, che e' esattamente quello che serve.
+     */
+    const font_t *title = font_get(FONT_ID_TINY);
+    const int title_x = UI_CENTER_CX - (int)font_measure_text(title, "PADEL SCORE") / 2;
 
-    /* La riga di separazione e' interrotta al centro dall'emblema. */
+    gfx_text(&s_g, title, "PADEL SCORE", title_x, UI_HEADER_TEXT_Y, COL_LABEL);
+    gfx_text(&s_g, title, "PADEL SCORE", title_x + 1, UI_HEADER_TEXT_Y, COL_LABEL);
+
+    /* La riga di separazione e' interrotta al centro dalla pallina. */
     const int margin = 8;
     const int left_x0 = margin;
-    const int left_w = (UI_CENTER_CX - UI_EMBLEM_W / 2 - UI_EMBLEM_GAP) - left_x0;
-    const int right_x0 = UI_CENTER_CX + UI_EMBLEM_W / 2 + UI_EMBLEM_GAP;
+    const int left_w = (UI_CENTER_CX - UI_BALL_R - 1 - UI_BALL_GAP) - left_x0;
+    const int right_x0 = UI_CENTER_CX + UI_BALL_R + 1 + UI_BALL_GAP;
     const int right_w = (UI_SCREEN_W - margin) - right_x0;
 
     if (left_w > 0) {
@@ -359,7 +376,7 @@ static void draw_static(void)
         gfx_fill_rect(&s_g, right_x0, UI_DIVIDER_CY, right_w, 1, COL_DIVIDER);
     }
 
-    draw_emblem(UI_CENTER_CX, COL_LABEL);
+    draw_ball(UI_CENTER_CX, COL_LABEL);
 }
 
 /* -------------------------------------------------------------------------- */

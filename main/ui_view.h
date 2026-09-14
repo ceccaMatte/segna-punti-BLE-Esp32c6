@@ -36,12 +36,11 @@
  *
  * Da sinistra a destra e dall'alto in basso:
  *
- *   y   4 .. 15   titolo
- *   y  18 .. 34   riga di separazione, con l'emblema al centro
+ *   y   3 .. 14   titolo, centrato
+ *   y  16 .. 34   pallina sulla riga di separazione
  *   y   3 .. 19   distintivo del tie-break, in alto a destra
  *   y  35 .. 193  i due pannelli con il loro alone, LORO a sinistra e NOI a destra
- *   y 196 .. 250  riquadro dei game
- *   y 256 .. 310  riquadro dei set
+ *   y 196 .. 314  scheda unica con i game nella parte alta e i set in quella bassa
  */
 
 #define UI_SCREEN_W      172
@@ -49,8 +48,11 @@
 
 #define UI_HEADER_TEXT_Y 3
 
-/** Riga su cui e' centrato l'emblema della riga di separazione. */
-#define UI_DIVIDER_CY    26
+/** Riga su cui e' centrata la pallina della riga di separazione. */
+#define UI_DIVIDER_CY    25
+
+/** Raggio della pallina. */
+#define UI_BALL_R        8
 
 #define UI_PANEL_Y       38
 #define UI_PANEL_W       79
@@ -66,11 +68,16 @@
  */
 #define UI_PANEL_GLOW    3
 
+/*
+ * I game e i set stanno in una scheda sola, divisa in due sezioni uguali da una
+ * riga sottile. Due schede separate con un margine in mezzo sprecavano spazio
+ * senza guadagnare niente.
+ */
 #define UI_CARD_X        8
 #define UI_CARD_W        156
-#define UI_CARD_H        54
-#define UI_GAME_Y        196
-#define UI_SET_Y         256
+#define UI_CARD_Y        196
+#define UI_CARD_SECTION  59
+#define UI_CARD_H        (UI_CARD_SECTION * 2)
 
 #define UI_TB_X          142
 #define UI_TB_Y          3
@@ -88,7 +95,7 @@
 /** Margine fra il bordo del pannello e quello che ci sta dentro. */
 #define UI_PANEL_INSET   3
 
-/** Raggio degli angoli dei pannelli. */
+/** Raggio degli angoli dei pannelli e della scheda in basso. */
 #define UI_PANEL_RADIUS  8
 
 /** Spessore del bordo luminoso dei pannelli. */
@@ -101,7 +108,7 @@
 #define UI_COL_LORO_CX   (UI_PANEL_LORO_X + UI_PANEL_W / 2)
 #define UI_COL_NOI_CX    (UI_PANEL_NOI_X + UI_PANEL_W / 2)
 
-/** Centro della schermata, dove stanno titolo, emblema ed etichette. */
+/** Centro della schermata, dove stanno titolo, pallina ed etichette. */
 #define UI_CENTER_CX     (UI_SCREEN_W / 2)
 
 /** Riga superiore del nome della squadra. */
@@ -113,18 +120,26 @@
 /** Raggio del pallino. */
 #define UI_DOT_R         5
 
-/** Riga superiore della scritta SERVE, sotto il pallino. */
-#define UI_SERVE_Y       (UI_PANEL_Y + 58)
+/**
+ * Riga superiore della scritta SERVE.
+ *
+ * Sotto il pallino deve restare un po' di respiro: attaccata com'era sembrava
+ * parte del pallino invece di una scritta a se'.
+ */
+#define UI_SERVE_Y       (UI_PANEL_Y + 63)
 
 /** Fascia verticale in cui viene centrata la cifra grande. */
-#define UI_SCORE_Y       (UI_PANEL_Y + 72)
-#define UI_SCORE_H       80
+#define UI_SCORE_Y       (UI_PANEL_Y + 78)
+#define UI_SCORE_H       74
 
-/** Margine fra il bordo del riquadro e l'etichetta GAME o SET. */
+/** Margine fra il bordo della scheda e l'etichetta GAME o SET. */
 #define UI_CARD_LABEL_DY 7
 
-/** Riga superiore dei due numeri dentro il riquadro. */
+/** Riga superiore dei due numeri dentro la scheda. */
 #define UI_CARD_VALUE_DY 22
+
+/** Riga sottile che divide le due sezioni della scheda. */
+#define UI_CARD_RULE_Y   (UI_CARD_SECTION)
 
 /** Distanza fra un numero e la barretta che lo separa dall'altro. */
 #define UI_CARD_DASH_GAP 8
@@ -133,25 +148,8 @@
 #define UI_CARD_DASH_W   10
 #define UI_CARD_DASH_H   3
 
-/*
- * Emblema della riga di separazione: due racchette con i manici che si
- * incrociano.
- *
- * A questa dimensione un disegno fedele sarebbe illeggibile: restano le due
- * sagome con i manici incrociati, che e' quanto basta a riconoscere il tema
- * senza rubare spazio al punteggio.
- */
-#define UI_EMBLEM_HEAD_W  11
-#define UI_EMBLEM_HEAD_H  11
-#define UI_EMBLEM_HANDLE  7
-#define UI_EMBLEM_W       (UI_EMBLEM_HEAD_W * 2 + 4)
-#define UI_EMBLEM_H       (UI_EMBLEM_HEAD_H + UI_EMBLEM_HANDLE)
-
-/** Riga superiore dell'emblema, centrato sulla riga di separazione. */
-#define UI_EMBLEM_TOP     (UI_DIVIDER_CY - 9)
-
-/** Spazio vuoto fra l'emblema e l'inizio dei due tratti di linea. */
-#define UI_EMBLEM_GAP     6
+/** Spazio vuoto fra la pallina e l'inizio dei due tratti di linea. */
+#define UI_BALL_GAP      6
 
 /**
  * Le zone dello schermo che possono cambiare.
@@ -160,13 +158,19 @@
  * pannello ha gli angoli arrotondati, quindi ridisegnare solo la cifra
  * lascerebbe degli spigoli vivi sopra la sagoma arrotondata. Ridisegnare il
  * pannello intero costa poco di piu' ed elimina del tutto il problema.
+ *
+ * La scheda in basso e' una zona sola anche se contiene due informazioni che
+ * cambiano separatamente: game e set. Dividerla in due zone sovrapposte
+ * romperebbe la regola per cui due zone non possono mai toccarsi, e dividerla
+ * in due meta' non sovrapposte costringerebbe ciascuna a ridisegnare la propria
+ * parte di bordo arrotondato. Una zona sola e' piu' semplice e costa poco di
+ * piu' solo quando cambia un set, cioe' poche volte per partita.
  */
 typedef enum {
     UI_SLOT_TB = 0,   /**< distintivo del tie-break, in alto a destra   */
     UI_SLOT_LORO,     /**< pannello di sinistra, nome e punteggio       */
     UI_SLOT_NOI,      /**< pannello di destra, nome e punteggio         */
-    UI_SLOT_GAME,     /**< riga dei game vinti nel set                  */
-    UI_SLOT_SET,      /**< riga dei set vinti                           */
+    UI_SLOT_CARD,     /**< scheda in basso: game nella parte alta, set in quella bassa */
     UI_SLOT_OVERLAY,  /**< schermata del vincitore, copre tutto          */
     UI_SLOT_COUNT
 } ui_slot_t;

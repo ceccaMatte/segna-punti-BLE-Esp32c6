@@ -63,15 +63,20 @@ const glyph_t *font_glyph(const font_t *f, char c);
 uint16_t font_measure_text(const font_t *f, const char *text);
 
 /**
- * @brief Sceglie il font del punteggio in base alla larghezza reale.
+ * @brief Sceglie il font del punteggio da mostrare nel pannello.
  *
- * Prova FONT_ID_SCORE, poi FONT_ID_SCORE_S e infine ripiega su
+ * Prova FONT_ID_SCORE_S e, se la stringa non entra, ripiega su
  * FONT_ID_SCORE_XS. La scelta e' guidata da quanto testo entra davvero nello
- * spazio disponibile, non dal numero di caratteri: "AD", "40", "8" e "112"
- * vengono dimensionati ciascuno per quello che occupano. Se in futuro cambia
- * il font, questa logica non va ritoccata.
+ * spazio disponibile, non dal numero di caratteri: "AD" e' molto piu' largo di
+ * "40" pur avendo la stessa lunghezza, e un punteggio di tie-break a tre cifre
+ * e' piu' largo di entrambi.
+ *
+ * Il livello piu' grande, FONT_ID_SCORE, non viene mai scelto qui ed e' usato
+ * solo dalla schermata del vincitore, dove c'e' una cifra sola. Con due
+ * caratteri riempirebbe il pannello quasi per intero e il punteggio sembrerebbe
+ * schiacciato contro la cornice.
  *
  * @param text      stringa da mostrare (es. "40", "AD", "102").
  * @param max_width pixel disponibili.
  */
-const font_t *font_pick_for_score(const char *text, uint16_t max_width);
+const font_t *font_pick_for_panel(const char *text, uint16_t max_width);

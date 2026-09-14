@@ -223,14 +223,14 @@ static void test_diff_base(void)
     a.noi_serve = !b.noi_serve;
     CHECK_EQ(ui_view_diff(&a, &b), UI_SLOT_BIT(UI_SLOT_NOI));
 
-    /* game e set hanno una zona ciascuno */
+    /* game e set hanno una zona sola: stanno nella stessa scheda */
     a = b;
     a.loro_games = (uint8_t)(b.loro_games + 1);
-    CHECK_EQ(ui_view_diff(&a, &b), UI_SLOT_BIT(UI_SLOT_GAME));
+    CHECK_EQ(ui_view_diff(&a, &b), UI_SLOT_BIT(UI_SLOT_CARD));
 
     a = b;
     a.noi_sets = (uint8_t)(b.noi_sets + 1);
-    CHECK_EQ(ui_view_diff(&a, &b), UI_SLOT_BIT(UI_SLOT_SET));
+    CHECK_EQ(ui_view_diff(&a, &b), UI_SLOT_BIT(UI_SLOT_CARD));
 
     /* il distintivo del tie-break e' una zona a se' */
     a = b;
@@ -429,18 +429,17 @@ static void test_riquadri_disgiunti(void)
         CHECK(r.y + r.h <= UI_SCREEN_H);
     }
 
-    /* i riquadri in basso stanno sotto i pannelli e dentro lo schermo */
-    const gfx_rect_t game = ui_view_slot_rect(UI_SLOT_GAME);
-    const gfx_rect_t set = ui_view_slot_rect(UI_SLOT_SET);
-    CHECK(game.y >= UI_PANEL_Y + UI_PANEL_H);
-    CHECK(game.y + game.h < set.y);
-    CHECK(set.y + set.h <= UI_SCREEN_H);
+    /* la scheda in basso sta sotto i pannelli e dentro lo schermo */
+    const gfx_rect_t card = ui_view_slot_rect(UI_SLOT_CARD);
+    CHECK(card.y >= UI_PANEL_Y + UI_PANEL_H);
+    CHECK(card.y + card.h <= UI_SCREEN_H);
+    CHECK_EQ(card.h, UI_CARD_H);
 
-    /* i pannelli stanno sopra la riga dei game, senza sovrapporsi */
+    /* i pannelli stanno sopra la scheda, senza sovrapporsi */
     const gfx_rect_t loro = ui_view_slot_rect(UI_SLOT_LORO);
     const gfx_rect_t noi = ui_view_slot_rect(UI_SLOT_NOI);
-    CHECK(loro.y + loro.h <= game.y);
-    CHECK(noi.y + noi.h <= game.y);
+    CHECK(loro.y + loro.h <= card.y);
+    CHECK(noi.y + noi.h <= card.y);
 
     /* e il distintivo sta sopra i pannelli */
     const gfx_rect_t tb = ui_view_slot_rect(UI_SLOT_TB);
