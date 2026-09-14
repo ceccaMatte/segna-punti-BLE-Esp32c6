@@ -41,13 +41,33 @@ export interface DataFacts {
   remainingSeconds: number | null;
 }
 
+/** Quello che si sa della riconnessione automatica. */
+export interface RetryFacts {
+  /** Vero se la pagina sta riprovando da sola. */
+  retrying: boolean;
+  /** Vero nell'istante in cui un tentativo e' in corso. */
+  attempting: boolean;
+  /** Tentativi fatti finora. */
+  attempts: number;
+  /** Secondi al prossimo tentativo, o null se non ce n'e' uno in programma. */
+  nextInSeconds: number | null;
+}
+
+/** Quando non c'e' nessuna riconnessione in corso. */
+export const NO_RETRY: RetryFacts = {
+  retrying: false,
+  attempting: false,
+  attempts: 0,
+  nextInSeconds: null,
+};
+
 export interface StatusHeadline {
   kind: StatusKind;
   text: string;
 }
 
 /** La riga grossa: si legge quella e si sa come stanno le cose. */
-export function headline(facts: StatusFacts): StatusHeadline {
+export function headline(facts: StatusFacts, retry: RetryFacts = NO_RETRY): StatusHeadline {
   if (!facts.supported) {
     return { kind: 'off', text: 'Web Bluetooth non disponibile in questo browser' };
   }
@@ -57,6 +77,12 @@ export function headline(facts: StatusFacts): StatusHeadline {
   }
 
   if (!facts.connected) {
+    /* Mentre riprova, la pagina non e' "scollegata e basta": sta lavorando, e
+       chi guarda deve poterlo vedere. */
+    if (retry.retrying && facts.knownName !== null) {
+      return { kind: 'warn', text: `RICONNESSIONE a ${facts.knownName}` };
+    }
+
     return facts.knownName !== null
       ? { kind: 'off', text: `NON COLLEGATA — ultima scheda: ${facts.knownName}` }
       : { kind: 'off', text: 'NESSUNA SCHEDA COLLEGATA' };
@@ -72,13 +98,27 @@ export function headline(facts: StatusFacts): StatusHeadline {
 }
 
 /** La riga sotto: cosa fare adesso, o cosa sta arrivando. */
-export function detailLine(facts: StatusFacts, data: DataFacts): string {
+export function detailLine(
+  facts: StatusFacts,
+  data: DataFacts,
+  retry: RetryFacts = NO_RETRY,
+): string {
   if (!facts.supported) {
     return 'Servono Chrome o Edge su computer, con la pagina aperta da localhost o in HTTPS.';
   }
 
   if (data.remainingSeconds !== null && data.remainingSeconds > 0) {
     return `Commissioning aperto sulla scheda: restano ${data.remainingSeconds} s per associarla.`;
+  }
+
+  if (!facts.connected && retry.retrying) {
+    if (retry.attempting) {
+      return 'Tentativo di collegamento in corso...';
+    }
+
+    if (retry.nextInSeconds !== null) {
+      return `La scheda non risponde: riprovo fra ${retry.nextInSeconds} s. Non serve fare niente, si ricollega da sola appena la sente.`;
+    }
   }
 
   if (!facts.connected) {

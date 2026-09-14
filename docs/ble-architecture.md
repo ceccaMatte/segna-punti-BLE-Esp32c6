@@ -259,6 +259,34 @@ commissioning*, insieme al piedino.
    stato si legge subito**, quindi una pagina che arriva a partita iniziata
    vede il punteggio giusto senza aspettare un punto.
 
+### Caduta del collegamento
+
+La scheda si riavvia — per un reset, per una riflasha, per un disturbo — e il
+collegamento cade da solo. La pagina non aspetta un click: **riprova da sola**,
+subito e poi sempre piu' di rado, un secondo, due, cinque, dieci, quindici, e
+poi ogni quindici secondi finche' non riesce o finche' qualcuno non le dice di
+smettere.
+
+E' lo stesso comportamento di un paio di cuffie: le riaccendi e si ricollegano
+all'ultimo telefono senza che nessuno apra un elenco. Due cose che ne
+conseguono e che vale la pena di sapere:
+
+- **mentre riprova la pagina lo dice**: la banda in alto diventa gialla e
+  scrive `RICONNESSIONE a PADEL_SCORE_XXXX`, con fra quanto si riprova;
+- **c'e' un pulsante per fermarla** (**ANNULLA RICONNESSIONE**), e chiudere il
+  collegamento a mano (**SCOLLEGA**) la spegne: la pagina non riapre mai un
+  collegamento che qualcuno ha appena chiuso.
+
+Un tentativo per volta: due `connect()` in parallelo sulla stessa scheda si
+danno fastidio a vicenda, e il secondo fallisce sempre.
+
+**L'unico caso che resta in mano all'utente** e' il ricaricamento della pagina,
+e solo dove il browser non ha `getDevices()`: le regole di Web Bluetooth non
+permettono di riprendere una scheda senza un click, nemmeno a chi l'aveva gia'
+scelta. In quel caso la pagina lo **dice**, invece di provarci per sempre:
+*"Riprendere la scheda, con questo browser, richiede un click: premi
+RICONNETTI"*.
+
 ### Associazione invalidata
 
 Se qualcuno ha tenuto basso GPIO0, la scheda ha un'altra associazione e il
@@ -330,6 +358,7 @@ web/
 │   ├── ble/
 │   │   ├── protocol.ts             UUID, opcode, pacchetti (gemello del firmware)
 │   │   ├── PadelBleClient.ts       collegamento, comandi, notifiche
+│   │   ├── reconnect.ts            come si riprova, quando il collegamento cade
 │   │   ├── diagnostics.ts          pacchetti, salti, duplicati, ritardi
 │   │   └── hex.ts                  il token da byte a testo e ritorno
 │   ├── score/ScoreState.ts         il pacchetto diventato tabellone

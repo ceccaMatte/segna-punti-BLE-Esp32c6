@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { detailLine, formatAge, headline, type StatusFacts } from '../src/ui/status';
+import { detailLine, formatAge, headline, NO_RETRY, type StatusFacts } from '../src/ui/status';
 
 /** Una situazione di partenza: non collegata, niente in memoria. */
 function facts(overrides: Partial<StatusFacts> = {}): StatusFacts {
@@ -116,6 +116,60 @@ describe('la riga sotto', () => {
     expect(detailLine(collegata, { ageMs: null, remainingSeconds: null })).toContain('primo');
     expect(detailLine(collegata, { ageMs: 400, remainingSeconds: null })).toContain('400 ms');
     expect(detailLine(collegata, { ageMs: 2500, remainingSeconds: null })).toContain('2.5 s');
+  });
+});
+
+describe('mentre la pagina riprova da sola', () => {
+  it('la riga grossa dice che si sta ricollegando', () => {
+    const result = headline(facts({ knownName: 'PADEL_SCORE_EE26' }), {
+      retrying: true,
+      attempting: false,
+      attempts: 2,
+      nextInSeconds: 4,
+    });
+
+    expect(result.kind).toBe('warn');
+    expect(result.text).toContain('RICONNESSIONE');
+    expect(result.text).toContain('PADEL_SCORE_EE26');
+  });
+
+  it('la riga sotto dice fra quanto si riprova, e che non serve fare niente', () => {
+    const text = detailLine(
+      facts({ knownName: 'PADEL_SCORE_EE26' }),
+      { ageMs: null, remainingSeconds: null },
+      { retrying: true, attempting: false, attempts: 2, nextInSeconds: 4 },
+    );
+
+    expect(text).toContain('4 s');
+    expect(text).toContain('da sola');
+  });
+
+  it('con un tentativo in corso lo dice invece di contare i secondi', () => {
+    const text = detailLine(
+      facts({ knownName: 'PADEL_SCORE_EE26' }),
+      { ageMs: null, remainingSeconds: null },
+      { retrying: true, attempting: true, attempts: 3, nextInSeconds: null },
+    );
+
+    expect(text).toContain('Tentativo');
+  });
+
+  it('a riconnessione ferma si torna a chiedere il pulsante', () => {
+    const text = detailLine(
+      facts({ knownName: 'PADEL_SCORE_EE26' }),
+      { ageMs: null, remainingSeconds: null },
+      NO_RETRY,
+    );
+
+    expect(text).toContain('RICONNETTI');
+  });
+
+  it('collegata: la riconnessione non compare da nessuna parte', () => {
+    const collegata = facts({ connected: true, authenticated: true });
+    const result = headline(collegata, { retrying: true, attempting: false, attempts: 1, nextInSeconds: 3 });
+
+    expect(result.kind).toBe('ok');
+    expect(result.text).not.toContain('RICONNESSIONE');
   });
 });
 

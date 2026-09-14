@@ -98,12 +98,31 @@ export class PadelBleClient {
   private infoCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private readonly listeners: ClientEvents;
 
+  /** La scheda gia' guardata, per non registrarne due volte la caduta. */
+  private watched: BluetoothDevice | null = null;
+
+  /** Vero se le notifiche sono gia' state chieste, per non chiederle due volte. */
+  private scoreListening = false;
+  private statusListening = false;
+
   constructor(listeners: ClientEvents = {}) {
     this.listeners = listeners;
   }
 
   get connected(): boolean {
     return this.server?.connected === true;
+  }
+
+  /**
+   * Vero se la pagina ha ancora in mano la scheda scelta.
+   *
+   * E' quello che distingue "posso riprovare da sola" da "serve che l'utente
+   * la scelga di nuovo": l'oggetto della scheda non sopravvive al
+   * ricaricamento della pagina. Anche dopo uno SCOLLEGA resta in mano: si e'
+   * chiuso il collegamento, non dimenticata la scheda.
+   */
+  get hasDevice(): boolean {
+    return this.device !== null;
   }
 
   get deviceName(): string | null {
@@ -129,12 +148,7 @@ export class PadelBleClient {
     });
 
     this.device = device;
-    device.addEventListener('gattserverdisconnected', () => {
-      this.server = null;
-      this.scoreCharacteristic = null;
-      this.statusCharacteristic = null;
-      this.listeners.onDisconnected?.();
-    });
+    this.watch(device);
 
     return device;
   }
@@ -154,12 +168,7 @@ export class PadelBleClient {
       const found = devices.find((candidate) => candidate.id === deviceId) ?? null;
       if (found !== null) {
         this.device = found;
-        found.addEventListener('gattserverdisconnected', () => {
-          this.server = null;
-          this.scoreCharacteristic = null;
-          this.statusCharacteristic = null;
-          this.listeners.onDisconnected?.();
-        });
+        this.watch(found);
       }
       return found;
     } catch {
@@ -201,11 +210,38 @@ export class PadelBleClient {
 
   async disconnect(): Promise<void> {
     this.server?.disconnect();
+    this.forgetConnection();
+  }
+
+  /**
+   * Tiene d'occhio una scheda.
+   *
+   * La caduta del collegamento puo' arrivare da sola — la scheda si riavvia, o
+   * si allontana — e va raccontata una volta sola per scheda: registrandola a
+   * ogni tentativo di riconnessione, la stessa caduta arriverebbe piu' volte, e
+   * la pagina riproverebbe a collegarsi due volte per ogni disconnessione.
+   */
+  private watch(device: BluetoothDevice): void {
+    if (this.watched === device) {
+      return;
+    }
+
+    this.watched = device;
+    device.addEventListener('gattserverdisconnected', () => {
+      this.forgetConnection();
+      this.listeners.onDisconnected?.();
+    });
+  }
+
+  /** Butta via quello che vale solo finche' il collegamento e' aperto. */
+  private forgetConnection(): void {
     this.server = null;
     this.scoreCharacteristic = null;
     this.statusCharacteristic = null;
     this.controlCharacteristic = null;
     this.infoCharacteristic = null;
+    this.scoreListening = false;
+    this.statusListening = false;
   }
 
   /* ------------------------------------------------------------------------ */
@@ -256,6 +292,10 @@ export class PadelBleClient {
 
   /** Si iscrive agli aggiornamenti della partita. */
   async subscribeScore(): Promise<void> {
+    if (this.scoreListening) {
+      return;
+    }
+
     const characteristic = this.require(this.scoreCharacteristic);
 
     characteristic.addEventListener('characteristicvaluechanged', () => {
@@ -270,11 +310,16 @@ export class PadelBleClient {
       }
     });
 
+    this.scoreListening = true;
     await characteristic.startNotifications();
   }
 
   /** Si iscrive agli aggiornamenti dello stato dell'associazione. */
   async subscribeStatus(): Promise<void> {
+    if (this.statusListening) {
+      return;
+    }
+
     const characteristic = this.require(this.statusCharacteristic);
 
     characteristic.addEventListener('characteristicvaluechanged', () => {
@@ -289,6 +334,7 @@ export class PadelBleClient {
       }
     });
 
+    this.statusListening = true;
     await characteristic.startNotifications();
   }
 

@@ -12,23 +12,24 @@
  */
 
 import { clear, el } from './dom';
-import { detailLine, headline, type DataFacts, type StatusFacts } from './status';
+import { detailLine, headline, type DataFacts, type RetryFacts, type StatusFacts } from './status';
 
 export class StatusBand {
   constructor(private readonly root: HTMLElement) {}
 
-  render(facts: StatusFacts, data: DataFacts, ident: string | null): void {
+  render(facts: StatusFacts, data: DataFacts, retry: RetryFacts, ident: string | null): void {
     clear(this.root);
 
-    const head = headline(facts);
+    const head = headline(facts, retry);
 
     /* Il colore della banda e' quello del suo stato: verde quando la scheda
-       risponde, giallo quando manca qualcosa, grigio quando non c'e' nessuno. */
+       risponde, giallo quando manca qualcosa o si sta riprovando, grigio
+       quando non c'e' nessuno. */
     this.root.className = `band band-${head.kind}`;
 
     const line = el('p', 'band-head');
     line.append(el('span', 'dot'), el('span', undefined, head.text));
-    this.root.append(line, el('p', 'band-detail', detailLine(facts, data)));
+    this.root.append(line, el('p', 'band-detail', detailLine(facts, data, retry)));
 
     if (ident !== null && ident !== '') {
       this.root.append(el('p', 'band-ident', ident));

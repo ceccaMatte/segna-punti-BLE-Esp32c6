@@ -9,6 +9,10 @@
  *   volte dopo    ritrovi la scheda gia' autorizzata -> AUTH col token salvato
  *                 -> leggi e ti iscrivi
  *
+ *   se cade il    la pagina riprova da sola, come fanno le cuffie quando le
+ *   collegamento  riaccendi: prima ogni secondo, poi sempre piu' di rado. La
+ *                 scheda puo' riavviarsi quanto vuole.
+ *
  *   se il token   "associazione non piu' valida": qualcuno ha tenuto basso il
  *   non vale      piedino di commissioning e la scheda ha un'altra
  *                 associazione. Si rifa' il commissioning.
@@ -19,6 +23,7 @@
 import { PadelBleClient, bluetoothAvailable, listKnownDevices, type KnownDevice } from './ble/PadelBleClient';
 import { PacketDiagnostics } from './ble/diagnostics';
 import { shortIdFromValue } from './ble/hex';
+import { AutoReconnect } from './ble/reconnect';
 import {
   CommissioningState,
   ResultCode,
@@ -33,7 +38,7 @@ import { ConnectionPanel, type DeviceRow } from './ui/ConnectionPanel';
 import { DiagnosticsPanel } from './ui/DiagnosticsPanel';
 import { ScoreboardPanel } from './ui/ScoreboardPanel';
 import { StatusBand } from './ui/StatusBand';
-import type { DataFacts, StatusFacts } from './ui/status';
+import type { DataFacts, RetryFacts, StatusFacts } from './ui/status';
 
 /* -------------------------------------------------------------------------- */
 /* Elementi della pagina                                                      */
@@ -64,6 +69,16 @@ let busy = false;
 /** Le schede che il browser lascia rivedere; null se non sa elencarle. */
 let knownDevices: KnownDevice[] | null = null;
 
+/**
+ * Vero finche' la pagina deve riprovare da sola a riprendere la scheda.
+ *
+ * Diventa falso quando e' l'utente a chiudere il collegamento (SCOLLEGA, o
+ * ANNULLA RICONNESSIONE): riaprire un collegamento che qualcuno ha appena
+ * chiuso sarebbe una sorpresa, e le sorprese con la radio non piacciono a
+ * nessuno.
+ */
+let autoMode = true;
+
 /** Token generato e in attesa che la scheda lo accetti. */
 let pendingToken: Uint8Array | null = null;
 
@@ -87,19 +102,37 @@ const connection = new ConnectionPanel(
   {
     onCommission: () => void commission(),
     onReconnect: () => void reconnect(),
-    onDisconnect: () => void client.disconnect(),
+    onDisconnect: () => stopAndDisconnect(),
     onForget: forget,
+    onStopRetry: stopRetry,
   },
 );
 
 const client = new PadelBleClient({
   onConnected: () => {
     message = null;
+    /* Il collegamento c'e': il conto dei tentativi riparte da zero. */
+    autoReconnect.connected();
     render();
   },
   onDisconnected: () => {
     diagnostics.noteDisconnect();
     streaming = false;
+
+    /*
+     * La scheda si e' riavviata, o e' passato un disturbo: si riprova da soli.
+     * Non si riprova se a chiudere e' stato l'utente, che e' quello che dice
+     * `autoMode`, ne' se non c'e' un'associazione da usare per farsi
+     * riconoscere.
+     *
+     * Il primo tentativo non parte subito: la radio ha appena perso il
+     * collegamento e ha bisogno di un momento. Un secondo e' quello che ci
+     * vuole.
+     */
+    if (autoMode && association !== null) {
+      autoReconnect.start(false);
+    }
+
     render();
   },
   onStatus: (packet) => {
@@ -113,6 +146,16 @@ const client = new PadelBleClient({
     message = text;
     render();
   },
+});
+
+/*
+ * La riconnessione automatica sta qui, non nel client: il client sa aprire un
+ * collegamento, ma non sa quante volte valga la pena riprovare. Come si
+ * riprova lo decide `reconnect.ts`, dove si puo' anche provare.
+ */
+const autoReconnect = new AutoReconnect({
+  attempt: () => attemptReconnect(),
+  onChange: () => render(),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -196,10 +239,60 @@ async function startStreaming(): Promise<void> {
   }
 }
 
+/**
+ * Riprova da sola a riprendere la scheda.
+ *
+ * E' il tentativo che la riconnessione automatica ripete finche' non riesce.
+ * Non e' un tentativo vero quello che arriva mentre c'e' una scelta in corso:
+ * c'e' una finestra di scelta aperta, e non ci si mette in mezzo.
+ */
+async function attemptReconnect(): Promise<boolean> {
+  if (association === null) {
+    /* Senza associazione non c'e' niente da riprendere: si smette, invece di
+       provarci ogni quindici secondi per non concludere niente. */
+    autoReconnect.stop();
+    return false;
+  }
+
+  if (busy) {
+    /* C'e' una scelta in corso, con la sua finestra aperta: non ci si mette in
+       mezzo, ma il tentativo successivo resta in programma. */
+    return false;
+  }
+
+  try {
+    if (!client.hasDevice) {
+      const known = await client.findKnownDevice(association.browserDeviceId);
+
+      if (known === null) {
+        /* Il browser non lascia riprendere una scheda senza un click, oppure
+           non la conosce piu': insistere non servirebbe a niente, e la pagina
+           lo dice invece di provarci per sempre. */
+        autoReconnect.stop();
+        message = 'Riprendere la scheda, con questo browser, richiede un click: premi RICONNETTI.';
+        render();
+        return false;
+      }
+    }
+
+    await client.connect();
+    await afterConnect();
+    return true;
+  } catch {
+    /* Scheda spenta, lontana o ancora in avvio: si riprovera' fra poco. */
+    return false;
+  }
+}
+
 async function connectAndIdentify(device: BluetoothDevice | null): Promise<void> {
   diagnostics.reset();
 
   await client.connect(device);
+  await afterConnect();
+}
+
+/** Quello che si fa con la scheda, appena il collegamento e' aperto. */
+async function afterConnect(): Promise<void> {
   info = await client.readDeviceInfo();
   status = await client.readStatus();
   await client.subscribeStatus();
@@ -232,6 +325,7 @@ async function commission(): Promise<void> {
     return;
   }
   busy = true;
+  autoMode = true;
   message = null;
   render();
 
@@ -251,6 +345,7 @@ async function reconnect(): Promise<void> {
     return;
   }
   busy = true;
+  autoMode = true;
   message = null;
   render();
 
@@ -278,28 +373,30 @@ async function reconnect(): Promise<void> {
   render();
 }
 
-/** Prova a ricollegarsi da sola all'apertura della pagina, senza disturbare nessuno. */
-async function tryQuietReconnect(): Promise<void> {
-  if (association === null || !bluetoothAvailable()) {
-    return;
-  }
+/**
+ * Scollega su richiesta dell'utente.
+ *
+ * E' l'unico caso in cui un collegamento si chiude e non si riapre da solo: chi
+ * ha premuto sa quello che vuole, e la pagina non deve fare la spiritosa.
+ */
+function stopAndDisconnect(): void {
+  autoMode = false;
+  autoReconnect.stop();
+  void client.disconnect();
+}
 
-  try {
-    const known = await client.findKnownDevice(association.browserDeviceId);
-    if (known === null) {
-      render();
-      return;
-    }
-    await connectAndIdentify(known);
-  } catch {
-    /* Non e' un errore da mostrare: e' solo un tentativo. Se non riesce, il
-       pulsante di riconnessione e' li' apposta. */
-  }
-
+/** L'utente non vuole aspettare che la scheda risponda: si smette di riprovare. */
+function stopRetry(): void {
+  autoMode = false;
+  autoReconnect.stop();
+  message =
+    'Riconnessione automatica fermata. Il collegamento si riprende con RICONNETTI.';
   render();
 }
 
 function forget(): void {
+  autoMode = false;
+  autoReconnect.stop();
   storage.clear();
   association = null;
   message =
@@ -338,8 +435,9 @@ function report(error: unknown): void {
 function render(): void {
   const facts = statusFacts();
   const data = dataFacts();
+  const retry = retryFacts();
 
-  statusBand.render(facts, data, identLine());
+  statusBand.render(facts, data, retry, identLine());
 
   connection.render({
     supported: facts.supported,
@@ -357,6 +455,8 @@ function render(): void {
     busy,
     devices: deviceRows(),
     canListDevices: knownDevices !== null,
+    retry,
+    canAutoReconnect: client.hasDevice || knownDevices !== null,
   });
 
   scoreboard.render(score, !facts.connected);
@@ -381,6 +481,21 @@ function dataFacts(): DataFacts {
     ageMs: diagnostics.ageMs(Date.now()),
     remainingSeconds:
       status !== null && status.remainingSeconds > 0 ? status.remainingSeconds : null,
+  };
+}
+
+/** Quello che sta facendo la riconnessione automatica, per la pagina. */
+function retryFacts(): RetryFacts {
+  const view = autoReconnect.view();
+
+  return {
+    retrying: view.enabled && !client.connected,
+    attempting: view.attempting,
+    attempts: view.attempts,
+    nextInSeconds:
+      view.nextAttemptAtMs !== null
+        ? Math.max(0, Math.ceil((view.nextAttemptAtMs - Date.now()) / 1000))
+        : null,
   };
 }
 
@@ -438,16 +553,41 @@ function deviceRows(): DeviceRow[] {
 
 render();
 
-/* L'eta' dell'ultimo aggiornamento cambia anche senza che arrivi niente: si
-   rinfrescano solo la banda e la diagnostica, per non far sparire i pulsanti
-   sotto il dito di chi sta per premere. */
+/* L'eta' dell'ultimo aggiornamento e il conto alla rovescia dei tentativi
+   cambiano anche senza che arrivi niente: si rinfrescano solo la banda e la
+   diagnostica, per non far sparire i pulsanti sotto il dito di chi sta per
+   premere. */
 setInterval(() => {
-  statusBand.render(statusFacts(), dataFacts(), identLine());
+  statusBand.render(statusFacts(), dataFacts(), retryFacts(), identLine());
   diagnosticsPanel.render(diagnostics, Date.now());
 }, 1000);
 
+/*
+ * Tornando sulla scheda del browser puo' essere passato un pezzo: se in quel
+ * frattempo il collegamento e' caduto, non ha senso aspettare il turno del
+ * timer, che magari e' lontano quindici secondi.
+ */
+document.addEventListener('visibilitychange', () => {
+  if (
+    document.visibilityState === 'visible' &&
+    autoMode &&
+    association !== null &&
+    !client.connected
+  ) {
+    autoReconnect.retryNow();
+  }
+});
+
+/*
+ * All'apertura della pagina si prova a riprendere la scheda da soli, come fa
+ * un paio di cuffie quando le riaccendi: l'associazione dice quale scheda e
+ * con quale token, e da li' in poi e' la pagina a insistere.
+ */
+if (association !== null) {
+  autoReconnect.start(true);
+}
+
 void refreshKnownDevices();
-void tryQuietReconnect();
 
 /** Rilegge l'elenco delle schede note al browser. */
 async function refreshKnownDevices(): Promise<void> {

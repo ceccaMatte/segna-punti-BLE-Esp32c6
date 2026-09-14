@@ -201,6 +201,15 @@ Quello che si vede, dall'alto in basso:
   in grigio, per non far credere che sia ancora vivo;
 - il pannello **Diagnostica**: pacchetti, salti, duplicati, ritardi.
 
+La pagina **riprova da sola** quando il collegamento cade — la scheda si
+riavvia, o passa un disturbo — come fanno le cuffie quando le riaccendi: subito,
+poi sempre più di rado, senza che nessuno prema niente. Mentre ci prova la banda
+in alto diventa gialla e lo scrive; **ANNULLA RICONNESSIONE** la ferma, e
+**SCOLLEGA** la spegne (la pagina non riapre mai un collegamento chiuso a mano).
+Dopo un **ricaricamento della pagina**, invece, riprendere la scheda richiede un
+click dove il browser non ha `getDevices()`: è una regola di Web Bluetooth, e la
+pagina lo dice invece di provarci per sempre.
+
 ### I test, senza scheda collegata
 
 ```powershell

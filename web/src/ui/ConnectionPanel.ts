@@ -1,9 +1,9 @@
 /**
  * Pannello del collegamento e del commissioning.
  *
- * Mostra a che punto siamo e mette a disposizione i quattro pulsanti che
- * servono. Non prende decisioni: lo stato gli arriva gia' pronto da fuori, e i
- * pulsanti si limitano a chiamare chi sa cosa fare.
+ * Mostra a che punto siamo e mette a disposizione i pulsanti che servono. Non
+ * prende decisioni: lo stato gli arriva gia' pronto da fuori, e i pulsanti si
+ * limitano a chiamare chi sa cosa fare.
  *
  * La riga di stato e' la stessa della banda in alto, presa da `status.ts`: due
  * posti che dicono la stessa cosa con parole proprie finiscono prima o poi per
@@ -14,7 +14,7 @@
 
 import { CommissioningState } from '../ble/protocol';
 import { button, clear, el, facts, statusLine } from './dom';
-import { headline, type StatusFacts } from './status';
+import { headline, type RetryFacts, type StatusFacts } from './status';
 
 /** Una scheda che questa pagina ha il permesso di rivedere. */
 export interface DeviceRow {
@@ -49,6 +49,10 @@ export interface ConnectionView {
   devices: DeviceRow[];
   /** Falso se il browser non sa elencarle (`getDevices()` assente). */
   canListDevices: boolean;
+  /** Cosa sta facendo la riconnessione automatica. */
+  retry: RetryFacts;
+  /** Falso quando la pagina non ha in mano la scheda e non puo' riprenderla da sola. */
+  canAutoReconnect: boolean;
 }
 
 export interface ConnectionActions {
@@ -56,6 +60,7 @@ export interface ConnectionActions {
   onReconnect: () => void;
   onDisconnect: () => void;
   onForget: () => void;
+  onStopRetry: () => void;
 }
 
 /** Lo stato del collegamento, come lo vede `status.ts`. */
@@ -68,6 +73,24 @@ function statusFacts(view: ConnectionView): StatusFacts {
     knownName: view.knownName,
     busy: view.busy,
   };
+}
+
+/** Come si chiama, in una riga, la riconnessione automatica. */
+function retryText(view: ConnectionView): string {
+  if (!view.hasAssociation) {
+    /* Senza associazione non c'e' niente da riprendere: la riga non serve. */
+    return '—';
+  }
+  if (!view.canAutoReconnect) {
+    return 'non disponibile: serve un click';
+  }
+  if (view.retry.attempting) {
+    return `tentativo in corso (${view.retry.attempts})`;
+  }
+  if (view.retry.retrying) {
+    return `in attesa (${view.retry.attempts} tentativi fatti)`;
+  }
+  return 'pronta';
 }
 
 /** L'elenco delle schede note al browser. */
@@ -120,7 +143,7 @@ export class ConnectionPanel {
       return;
     }
 
-    const head = headline(statusFacts(view));
+    const head = headline(statusFacts(view), view.retry);
     this.statusRoot.append(statusLine(head.kind, head.text));
 
     const rows: Array<[string, string]> = [
@@ -129,6 +152,7 @@ export class ConnectionPanel {
       ['Firmware', view.firmware !== null ? String(view.firmware) : '—'],
       ['Associazione',
         view.state === CommissioningState.Commissioned ? 'presente' : 'assente'],
+      ['Riconnessione automatica', retryText(view)],
     ];
 
     if (view.remainingSeconds !== null && view.remainingSeconds > 0) {
@@ -151,6 +175,16 @@ export class ConnectionPanel {
     }
 
     if (!view.connected) {
+      if (view.retry.retrying) {
+        /* Mentre riprova da sola, l'unica cosa che si puo' volere e' che
+           smetta. */
+        this.buttonsRoot.append(
+          button('ANNULLA RICONNESSIONE', () => this.actions.onStopRetry()),
+          button('SCEGLI SCHEDA', () => this.actions.onCommission()),
+        );
+        return;
+      }
+
       if (view.hasAssociation) {
         this.buttonsRoot.append(
           button('RICONNETTI', () => this.actions.onReconnect()),
