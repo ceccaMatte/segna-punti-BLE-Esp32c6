@@ -11,6 +11,7 @@
     all         Build, flash and open the serial monitor (default)
     build       Compile only
     flash       Write the binary to the board
+    verify      Read the board back and compare it with the built binary
     monitor     Open the serial monitor only
     clean       Remove the build directory
     size        Report the firmware footprint
@@ -38,13 +39,22 @@
     .\scripts\flash.ps1 -Port COM7
     Build, flash and monitor on an explicitly chosen port.
 
+.EXAMPLE
+    .\scripts\flash.ps1 -Action verify -Port COM18
+    Check that the board really holds the binary that was just compiled.
+
 .NOTES
+    Usare -Action verify dopo una flash di cui non si e' certi. "La scrittura
+    e' andata bene" non si puo' dedurre dal log: un monitor seriale rimasto
+    attaccato alla porta la fa fallire, e il messaggio di avvio che si vede
+    subito dopo puo' benissimo venire dalla compilazione precedente.
+
     Leave the serial monitor with Ctrl+].
     SPDX-License-Identifier: MIT
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'build', 'flash', 'monitor', 'clean', 'size', 'setTarget', 'menuconfig')]
+    [ValidateSet('all', 'build', 'flash', 'verify', 'monitor', 'clean', 'size', 'setTarget', 'menuconfig')]
     [string] $Action = 'all',
 
     [string] $Port,
@@ -106,7 +116,7 @@ if (-not (Get-Command idf.py -ErrorAction SilentlyContinue)) {
 }
 
 $idfArgs = @()
-if ($Action -in @('all', 'flash', 'monitor')) {
+if ($Action -in @('all', 'flash', 'verify', 'monitor')) {
     if (-not $Port) {
         $Port = Get-EspPort
     }
@@ -130,6 +140,50 @@ try {
         'flash'     { idf.py @idfArgs flash }
         'monitor'   { idf.py @idfArgs monitor }
         'all'       { idf.py @idfArgs flash monitor }
+
+        'verify' {
+            # Si rilegge dalla scheda quello che dovrebbe esserci e lo si
+            # confronta con i file appena compilati. E' l'unico modo di sapere
+            # con certezza quale programma sta girando: la dimensione scritta
+            # durante la flash, da sola, non basta se prima non si e' controllato
+            # che la scrittura sia davvero riuscita.
+            if (-not $Port) {
+                throw 'Per verificare serve la porta seriale: usa -Port COMx.'
+            }
+
+            $parts = @(
+                @{ Offset = '0x0';     File = 'build\bootloader\bootloader.bin' },
+                @{ Offset = '0x8000';  File = 'build\partition_table\partition-table.bin' },
+                @{ Offset = '0x10000'; File = 'build\padel_scoreboard.bin' }
+            )
+
+            $allOk = $true
+            foreach ($part in $parts) {
+                if (-not (Test-Path -LiteralPath $part.File)) {
+                    Write-Host "  MANCA          $($part.File)" -ForegroundColor Red
+                    $allOk = $false
+                    continue
+                }
+
+                Write-Host "  $($part.Offset.PadRight(8)) $($part.File)" -ForegroundColor Gray
+
+                # --chip fisso: questa scheda monta un ESP32-C6.
+                python -m esptool --chip esp32c6 -p $Port --before default-reset --after hard-reset `
+                    verify-flash $part.Offset $part.File
+
+                if ($LASTEXITCODE -ne 0) {
+                    $allOk = $false
+                }
+            }
+
+            Write-Host ''
+            if ($allOk) {
+                Write-Host 'La scheda contiene esattamente il programma compilato.' -ForegroundColor Green
+            } else {
+                Write-Host 'La scheda NON contiene il programma compilato: rifai la flash.' -ForegroundColor Red
+                exit 1
+            }
+        }
     }
 } finally {
     Pop-Location
