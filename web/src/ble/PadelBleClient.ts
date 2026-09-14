@@ -1,0 +1,270 @@
+/**
+ * Il collegamento con la scheda.
+ *
+ * Si occupa solo di Bluetooth: trova la scheda, apre il collegamento, legge e
+ * scrive pacchetti e avvisa chi sta fuori quando succede qualcosa. Non sa
+ * niente di schermate e non calcola niente del padel: i byte che riceve li
+ * consegna gia' decodificati, e i byte che manda li riceve gia' pronti.
+ *
+ * Due cose che Web Bluetooth impone e che vale la pena di sapere:
+ *
+ *   - `requestDevice()` deve partire da un gesto dell'utente (un click): il
+ *     browser mostra la sua finestra di scelta e non si puo' evitare;
+ *   - il collegamento non sopravvive al ricaricamento della pagina, e
+ *     ricollegarsi senza chiedere nulla e' possibile solo dove il browser
+ *     permette `getDevices()`, che in Chrome sta ancora dietro un'impostazione
+ *     sperimentale. Dove non c'e', si riparte dal pulsante di riconnessione.
+ */
+
+import {
+  COMMISSIONING_CONTROL_UUID,
+  COMMISSIONING_STATUS_UUID,
+  DEVICE_INFO_UUID,
+  NAME_PREFIX,
+  ProtocolError,
+  SCORE_STATE_UUID,
+  SERVICE_UUID,
+  ControlOp,
+  decodeCommissioningStatus,
+  decodeDeviceInfo,
+  decodeScoreState,
+  encodeControl,
+  type CommissioningStatusPacket,
+  type DeviceInfoPacket,
+  type ScoreStatePacket,
+} from './protocol';
+
+export interface ClientEvents {
+  onConnected?: (device: { name: string; id: string }) => void;
+  onDisconnected?: () => void;
+  onDeviceInfo?: (info: DeviceInfoPacket) => void;
+  onStatus?: (status: CommissioningStatusPacket) => void;
+  onScore?: (score: ScoreStatePacket) => void;
+  onError?: (message: string) => void;
+}
+
+/** Vero se il browser ha Web Bluetooth. */
+export function bluetoothAvailable(): boolean {
+  return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+}
+
+export class PadelBleClient {
+  private device: BluetoothDevice | null = null;
+  private server: BluetoothRemoteGATTServer | null = null;
+  private scoreCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private statusCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private controlCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private infoCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private readonly listeners: ClientEvents;
+
+  constructor(listeners: ClientEvents = {}) {
+    this.listeners = listeners;
+  }
+
+  get connected(): boolean {
+    return this.server?.connected === true;
+  }
+
+  get deviceName(): string | null {
+    return this.device?.name ?? null;
+  }
+
+  get deviceId(): string | null {
+    return this.device?.id ?? null;
+  }
+
+  /**
+   * Chiede al browser di far scegliere una scheda.
+   *
+   * Il filtro sul servizio e' quello che conta: il nome si puo' cambiare, il
+   * servizio no. Il prefisso del nome si aggiunge solo come aiuto per l'occhio
+   * nella finestra di scelta, e per non far comparire in elenco le cose che non
+   * c'entrano.
+   */
+  async requestDevice(): Promise<BluetoothDevice> {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }, { namePrefix: NAME_PREFIX }],
+      optionalServices: [SERVICE_UUID],
+    });
+
+    this.device = device;
+    device.addEventListener('gattserverdisconnected', () => {
+      this.server = null;
+      this.scoreCharacteristic = null;
+      this.statusCharacteristic = null;
+      this.listeners.onDisconnected?.();
+    });
+
+    return device;
+  }
+
+  /** Riprende una scheda gia' autorizzata dal browser, se il browser lo permette. */
+  async findKnownDevice(deviceId: string): Promise<BluetoothDevice | null> {
+    const bluetooth = navigator.bluetooth as Bluetooth & {
+      getDevices?: () => Promise<BluetoothDevice[]>;
+    };
+
+    if (typeof bluetooth.getDevices !== 'function') {
+      return null;
+    }
+
+    try {
+      const devices = await bluetooth.getDevices();
+      const found = devices.find((candidate) => candidate.id === deviceId) ?? null;
+      if (found !== null) {
+        this.device = found;
+        found.addEventListener('gattserverdisconnected', () => {
+          this.server = null;
+          this.scoreCharacteristic = null;
+          this.statusCharacteristic = null;
+          this.listeners.onDisconnected?.();
+        });
+      }
+      return found;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Apre il collegamento e trova le characteristic. */
+  async connect(device: BluetoothDevice | null = this.device): Promise<void> {
+    if (device === null) {
+      throw new Error('nessuna scheda scelta');
+    }
+
+    this.device = device;
+
+    const server = await device.gatt?.connect();
+    if (!server) {
+      throw new Error('collegamento non riuscito');
+    }
+    this.server = server;
+
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const score = await service.getCharacteristic(SCORE_STATE_UUID);
+    const control = await service.getCharacteristic(COMMISSIONING_CONTROL_UUID);
+    const status = await service.getCharacteristic(COMMISSIONING_STATUS_UUID);
+    const info = await service.getCharacteristic(DEVICE_INFO_UUID);
+
+    this.scoreCharacteristic = score;
+    this.statusCharacteristic = status;
+    this.controlCharacteristic = control;
+    this.infoCharacteristic = info;
+
+    this.listeners.onConnected?.({
+      name: device.name ?? '(senza nome)',
+      id: device.id,
+    });
+  }
+
+  async disconnect(): Promise<void> {
+    this.server?.disconnect();
+    this.server = null;
+    this.scoreCharacteristic = null;
+    this.statusCharacteristic = null;
+    this.controlCharacteristic = null;
+    this.infoCharacteristic = null;
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Letture                                                                  */
+  /* ------------------------------------------------------------------------ */
+
+  async readDeviceInfo(): Promise<DeviceInfoPacket> {
+    const value = await this.require(this.infoCharacteristic).readValue();
+    return decodeDeviceInfo(value);
+  }
+
+  async readStatus(): Promise<CommissioningStatusPacket> {
+    const value = await this.require(this.statusCharacteristic).readValue();
+    return decodeCommissioningStatus(value);
+  }
+
+  async readScore(): Promise<ScoreStatePacket> {
+    const value = await this.require(this.scoreCharacteristic).readValue();
+    return decodeScoreState(value);
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Comandi                                                                  */
+  /* ------------------------------------------------------------------------ */
+
+  async claim(token: Uint8Array): Promise<void> {
+    await this.writeControl(ControlOp.Claim, token);
+  }
+
+  async auth(token: Uint8Array): Promise<void> {
+    await this.writeControl(ControlOp.Auth, token);
+  }
+
+  private async writeControl(op: ControlOp, token: Uint8Array): Promise<void> {
+    const payload = encodeControl(op, token);
+    /*
+     * `writeValueWithResponse` e non `writeValue`: la scrittura con risposta
+     * arriva solo quando la scheda ha davvero preso in carico il comando, e se
+     * qualcosa va storto il browser lo dice. Per un'associazione, sapere che il
+     * comando e' arrivato vale l'attesa di qualche millisecondo in piu'.
+     */
+    await this.require(this.controlCharacteristic).writeValueWithResponse(payload);
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Notifiche                                                                */
+  /* ------------------------------------------------------------------------ */
+
+  /** Si iscrive agli aggiornamenti della partita. */
+  async subscribeScore(): Promise<void> {
+    const characteristic = this.require(this.scoreCharacteristic);
+
+    characteristic.addEventListener('characteristicvaluechanged', () => {
+      const value = characteristic.value;
+      if (!value) {
+        return;
+      }
+      try {
+        this.listeners.onScore?.(decodeScoreState(value));
+      } catch (error) {
+        this.report(error);
+      }
+    });
+
+    await characteristic.startNotifications();
+  }
+
+  /** Si iscrive agli aggiornamenti dello stato dell'associazione. */
+  async subscribeStatus(): Promise<void> {
+    const characteristic = this.require(this.statusCharacteristic);
+
+    characteristic.addEventListener('characteristicvaluechanged', () => {
+      const value = characteristic.value;
+      if (!value) {
+        return;
+      }
+      try {
+        this.listeners.onStatus?.(decodeCommissioningStatus(value));
+      } catch (error) {
+        this.report(error);
+      }
+    });
+
+    await characteristic.startNotifications();
+  }
+
+  /* ------------------------------------------------------------------------ */
+
+  private require(characteristic: BluetoothRemoteGATTCharacteristic | null): BluetoothRemoteGATTCharacteristic {
+    if (characteristic === null) {
+      throw new Error('collegamento non aperto');
+    }
+    return characteristic;
+  }
+
+  private report(error: unknown): void {
+    const message =
+      error instanceof ProtocolError || error instanceof Error
+        ? error.message
+        : 'errore sconosciuto';
+    this.listeners.onError?.(message);
+  }
+}

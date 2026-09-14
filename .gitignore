@@ -10,6 +10,14 @@ dependencies.lock
 # Test host: eseguibile generato da test/run_tests.ps1
 test/*.exe
 
+# Pagina web: dipendenze e risultato della compilazione
+web/node_modules/
+web/dist/
+
+# Log temporanei degli script
+build_log.txt
+flash_log.txt
+
 # Editor / OS noise
 .DS_Store
 Thumbs.db

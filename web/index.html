@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Segnapunti padel — pagina di controllo</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="page-head">
+      <h1>Segnapunti padel</h1>
+      <p class="subtitle">
+        Collegamento diretto alla scheda via Bluetooth: nessun server, nessun account.
+        Il punteggio lo calcola la scheda, qui si guarda e basta.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>Collegamento</h2>
+        <div id="connection-status"></div>
+        <div id="connection-facts"></div>
+        <div id="connection-message"></div>
+        <div id="connection-actions" class="actions"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Partita</h2>
+        <div id="score-content"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Diagnostica</h2>
+        <div id="diagnostics-facts"></div>
+      </section>
+    </main>
+
+    <footer class="page-foot">
+      <p>
+        Web Bluetooth richiede Chrome o Edge su computer, una pagina servita da
+        <code>localhost</code> o in HTTPS, e il Bluetooth acceso.
+      </p>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -29,6 +29,12 @@ verde per LORO e azzurro per NOI. Annullando non c'è nessuno spettacolo: il
 colore torna semplicemente indietro, perché chi si è corretto non deve vedersi
 una festa. La luminosità si regola da menuconfig, e a zero il LED resta spento.
 
+Una **pagina web** può collegarsi via Bluetooth e mostrare lo stesso punteggio
+sul computer, senza server e senza account. La scheda resta lei la padrona:
+manda lo stato, non lo riceve, e chi non si è fatto riconoscere non vede nulla.
+Tenendo basso il piedino di commissioning per tre secondi si revoca
+l'associazione e si apre la finestra per associarne una nuova.
+
 ---
 
 ## Cosa rende questo progetto diverso dal solito
@@ -97,9 +103,13 @@ GPIO9 ──→ button.c ──→ controller.c ──→ match.c ──→ hist
                           │                 │
                           │                 └──→ ui_view.c ──→ ui.c ──→ gfx.c
                           │                                     │
-                          └──→ led_anim.c ──→ rgb_led.c         └──→ display.c
-                                    │                │                    │
-                                    └────────────────┴────────────────────┴──→ ST7789 e LED RGB
+                          ├──→ led_anim.c ──→ rgb_led.c         └──→ display.c
+                          │           │              │                  │
+                          └──→ ble_score_service.c ──┼──────────────────┴──→ schermo, LED
+                                    │                │
+GPIO0 ──→ commissioning_manager.c ──┴──→ ble_gatt.c ──→ Bluetooth ──→ pagina web
+                    │                              ▲
+                    └──→ nvs_store.c (token)       └── commissioning_ui.c → schermo
 ```
 
 Un solo senso di marcia. Nessuno risale la catena.
@@ -116,8 +126,19 @@ Un solo senso di marcia. Nessuno risale la catena.
 | `ui_view` | cosa va mostrato e cosa è cambiato | no |
 | `palette` | i colori delle due squadre, per schermo e LED | no |
 | `led_anim` | lo spettacolo di luci e che colore lasciare acceso | no |
+| `ble_protocol` | UUID, opcode e disposizione dei byte dei pacchetti | no |
+| `score_state_adapter` | trasforma il punteggio nel pacchetto da spedire | no |
+| `commissioning_state` | la macchina a stati dell'associazione | no |
+| `hold_gesture` | riconosce il piedino tenuto basso per tre secondi | no |
+| `device_identity` | dall'indirizzo della scheda al suo nome breve | no |
 | `ui` | come si disegna la schermata | solo per la larghezza |
+| `commissioning_ui` | come si disegna la schermata di commissioning | solo per la larghezza |
 | `display` | bus SPI, controller ST7789, retroilluminazione | sì |
+| `rgb_led` | il LED di bordo, WS2812B sul periferico RMT | sì |
+| `ble_gatt` | NimBLE: servizio, annuncio, connessioni, notifiche | sì |
+| `nvs_store` | il token di associazione, l'unica cosa scritta in memoria | sì |
+| `commissioning_manager` | la regia del commissioning | sì |
+| `ble_score_service` | il punto in cui il punteggio incontra la radio | sì |
 | `rgb_led` | il LED di bordo, WS2812B sul periferico RMT | sì |
 | `main` | ciclo principale | sì |
 
@@ -146,6 +167,25 @@ ESP-IDF giusto (v6.0.2) e trova la porta seriale della scheda.
 # quanto spazio occupa
 .\scripts\flash.ps1 -Action size
 ```
+
+### La pagina web
+
+La pagina sta in `web/` ed è una webapp statica: nessun server applicativo, la
+comunicazione è diretta fra browser e scheda.
+
+```powershell
+cd web
+npm install
+npm run dev        # apre su http://localhost:5173
+
+npm run test       # prove dei moduli puri
+npm run typecheck  # controllo dei tipi
+npm run build      # versione da pubblicare, in web/dist
+```
+
+Servono **Chrome o Edge su computer**, il **Bluetooth acceso** e una pagina
+servita da `localhost` oppure in HTTPS: Web Bluetooth non funziona altrove, ed è
+una regola del browser, non una scelta di questo progetto.
 
 ### I test, senza scheda collegata
 
@@ -182,6 +222,10 @@ Tutto si configura da `idf.py menuconfig` → **Segnapunti padel**.
 |---|---|---|
 | Luminosità | 500 ‰ | metà potenza: il produttore avverte che il massimo lascia aloni permanenti |
 | Luminosità LED | 400 ‰ | quanto è luminoso il LED di bordo, spettacolo compreso; a 0 resta spento |
+| Piedino di commissioning | GPIO0 | tenuto verso massa per 3 s apre la finestra |
+| Tenuta per aprire | 3000 ms | quanto va tenuto basso il piedino |
+| Durata della finestra | 60000 ms | per quanto la scheda accetta una nuova associazione |
+| Esito a video | 2000 ms | quanto resta SUCCESS o TIMEOUT prima di tornare al punteggio |
 | Rimbalzo ignorato | 25 ms | quanto deve restare stabile il piedino prima di essere creduto |
 | Finestra multi-click | 400 ms | quanto si aspetta per capire se arriva un altro click |
 | Pressione lunga | 4000 ms | durata per l'azzeramento |
@@ -192,6 +236,44 @@ Tutto si configura da `idf.py menuconfig` → **Segnapunti padel**.
 | Log degli eventi | no | scrive sul monitor seriale quale gesto è stato riconosciuto |
 | Log dei ridisegni | no | scrive quante zone e quanti pixel sono stati riscritti |
 | Verifica coerenza | no | controlla lo stato della partita dopo ogni punto |
+
+---
+
+## Associare una pagina web (commissioning)
+
+La scheda non si fa comandare da chiunque: prima bisogna associarla a una pagina
+web, e l'associazione si puo' revocare in qualsiasi momento.
+
+**Prima volta**
+
+1. Porta il piedino **GPIO0 verso massa** e tienilo li' per **tre secondi**. Sul
+display compare la schermata `COMMISSIONING` con il nome della scheda, lo stato
+della radio e il conto alla rovescia. La finestra resta aperta **sessanta
+secondi**.
+2. Apri la pagina (`cd web; npm run dev`) e premi **COMMISSIONA SCHEDA**.
+3. Nella finestra del browser scegli `PADEL_SCORE_XXXX`, dove `XXXX` sono gli
+ultimi due byte dell'indirizzo Bluetooth della scheda: cosi' si riconosce
+quale scheda si sta prendendo.
+4. La pagina genera un token casuale, lo manda con `CLAIM`, e lo salva nel
+browser insieme al riferimento alla scheda. Sul display compare `SUCCESS`.
+
+**Volte successive**
+
+La pagina ritrova da sola la scheda e si fa riconoscere con il token salvato: se
+il browser non lo permette, c'è il pulsante **RICONNETTI**.
+
+**Per revocare l'associazione**
+
+Tieni di nuovo GPIO0 verso massa per tre secondi: la scheda cancella il token
+e riapre la finestra. D'ora in poi la vecchia pagina riceve
+*"associazione non piu' valida"* e si rifa' il commissioning.
+
+> ⚠️ Il piedino di commissioning è **GPIO0**, che sulla scheda è libero e non è
+> uno dei piedini di avvio. Va portato verso massa con un filo o un pulsante:
+> non è uno dei tasti presenti a bordo.
+
+Il protocollo completo, pacchetto per pacchetto, sta in
+[`docs/ble-architecture.md`](docs/ble-architecture.md).
 
 ---
 
@@ -224,6 +306,29 @@ Guarda le barre e cambia **una sola riga** in fondo a `main/display.c`:
 
 Sono le uniche quattro incognite che non si possono dedurre dai documenti: il
 resto è verificato.
+
+### Il Bluetooth non si vede
+
+Il monitor seriale lo dice all'avvio:
+
+```
+I (238) led: LED RGB acceso su GPIO8
+I (240) commissioning: servizio pronto, nome PADEL_SCORE_A31F
+I (241) ble: in annuncio come PADEL_SCORE_A31F
+```
+
+Se la riga `servizio pronto` manca, la riga sopra dice perché, e in ogni caso il
+segnapunti continua a funzionare: si gioca anche senza pagina web.
+
+Se la scheda non compare nella finestra di scelta del browser, controlla di
+essere su `localhost` o in HTTPS, che il Bluetooth del computer sia acceso e che
+non ci siano altri programmi collegati alla scheda: la connessione è una sola.
+
+### La pagina dice «associazione non più valida»
+
+Qualcuno ha tenuto basso il piedino di commissioning: la scheda ha cancellato il
+vecchio token e ne accetta uno nuovo solo a finestra aperta. Si tiene basso il
+piedino per tre secondi e si preme **COMMISSIONA SCHEDA**.
 
 ### Il LED non si accende
 
@@ -271,19 +376,33 @@ attiva.
 
 ```
 test-Deep-seek/
-├── CMakeLists.txt          # Progetto ESP-IDF
-├── sdkconfig.defaults      # Target, scheda, console, flash
+├── CMakeLists.txt              # progetto ESP-IDF
+├── sdkconfig.defaults          # target, console, flash, Bluetooth
 ├── .vscode/
-│   └── c_cpp_properties.json  # IntelliSense via build/compile_commands.json
-├── main/
-│   ├── CMakeLists.txt
-│   ├── Kconfig.projbuild   # Menu "Board configuration" di menuconfig
-│   └── main.c              # Tutta la logica: init GPIO + lettura pulsante
-├── scripts/
-│   └── flash.ps1           # Script build / flash / monitor per PowerShell
-├── docs/
-│   └── HARDWARE.md         # Pinout verificato di entrambe le schede
-└── README.md
+│   └── c_cpp_properties.json   # IntelliSense via build/compile_commands.json
+├── main/                       # il firmware
+│   ├── match.c · history.c         # le regole del padel             (puri)
+│   ├── button.c · controller.c     # gesti e fasi della partita      (puri)
+│   ├── ui_view.c · gfx.c · font.c  # schermata e caratteri           (puri)
+│   ├── led_anim.c                  # lo spettacolo di luci           (puro)
+│   ├── ble_protocol.c              # UUID, opcode, pacchetti         (puro)
+│   ├── score_state_adapter.c       # dal punteggio al pacchetto      (puro)
+│   ├── commissioning_state.c       # macchina a stati dell'associazione (pura)
+│   ├── hold_gesture.c              # il piedino tenuto basso          (puro)
+│   ├── device_identity.c           # il nome della scheda            (puro)
+│   ├── ui.c · display.c            # disegno e controller ST7789
+│   ├── rgb_led.c                   # LED di bordo, WS2812B via RMT
+│   ├── ble_gatt.c                  # NimBLE: servizio, annuncio, notifiche
+│   ├── nvs_store.c                 # il token in memoria permanente
+│   ├── commissioning_manager.c · commissioning_ui.c
+│   ├── ble_score_service.c         # pubblica lo stato sulla radio
+│   └── main.c                      # il ciclo principale
+├── test/                       # prove host: .\test\run_tests.ps1
+├── web/                        # la pagina web (Vite + TypeScript)
+├── scripts/flash.ps1           # build / flash / verify / monitor
+├── docs/HARDWARE.md            # piedinatura verificata
+├── docs/ble-architecture.md    # il protocollo Bluetooth, in dettaglio
+└── examples/boot_hello/        # il primo programma, fuori dal build
 ```
 
 > Dopo il primo `idf.py build` viene generato `build/compile_commands.json`, che
@@ -291,29 +410,13 @@ test-Deep-seek/
 > di ESP-IDF. Prima del primo build l'editor segnala header non trovati: è
 > normale e non influisce sulla compilazione.
 
-### Scegliere la scheda
+### La scheda
 
-Il progetto supporta entrambe le schede. La selezione vive in
-`sdkconfig.defaults` e si cambia da `menuconfig` → **Board configuration**:
-
-| Voce | Default | Note |
-|---|---|---|
-| `CONFIG_BOARD_ESP32_C6_LCD_147` | **attiva** | Imposta il pin BOOT a GPIO9 |
-| `CONFIG_BOARD_ESP32_C5_LCD_147` | disattiva | Imposta il pin BOOT a GPIO28 |
-| `CONFIG_BOOT_BUTTON_GPIO` | 9 / 28 | Sovrascrivibile per un pulsante esterno |
-| `CONFIG_POLL_INTERVAL_MS` | 20 | Periodo di campionamento |
-| `CONFIG_DEBOUNCE_SAMPLES` | 3 | Letture identiche richieste |
-| `CONFIG_PRINT_PRESS_COUNTER` | off | Stampa `Hello World (#N)` |
-
-Scheda e target di build devono coincidere: `main.c` lo verifica a tempo di
-compilazione con un `#error` esplicito, così non si legge mai il pin sbagliato.
-
-Per passare alla ESP32-C5:
-
-```powershell
-idf.py set-target esp32c5
-# poi in menuconfig -> Board configuration, seleziona ESP32-C5-LCD-1.47
-```
+Il segnapunti è scritto e verificato per la **Waveshare ESP32-C6-LCD-1.47**, e
+non è previsto il supporto ad altre schede: la piedinatura sta in
+`main/board.h`, il target è dichiarato in `sdkconfig.defaults`, quindi non serve
+eseguire `idf.py set-target`. Compilando per un altro chip, `main.c` se ne
+accorge con un `#error` prima di provare a leggere un piedino.
 
 ---
 
@@ -359,61 +462,56 @@ Per uscire dal monitor seriale premi **Ctrl + ]**.
 
 ## Output atteso
 
-All'avvio compare il banner (output reale catturato dalla scheda):
+All'avvio compare il banner (output reale, catturato dalla scheda):
 
 ```
 ==================================================
-  Waveshare ESP32-C6-LCD-1.47
-  BOOT button demo
+  Segnapunti padel - ESP32-C6-LCD-1.47
 ==================================================
-  SoC      : ESP32-C6, 1 core(s), silicon rev v0.1
-  ESP-IDF  : v6.0.2
-  Console  : USB Serial/JTAG
-  BOOT     : GPIO9 (active low, 60 ms debounce)
+  chip       ESP32-C6 rev v0.1, ESP-IDF v6.0.2
+  schermo    ST7789 172x320, margine X 34, SPI 40 MHz
+  LED RGB    GPIO8, luminosita' 40%
+  pulsante   GPIO9, attivo basso
+  gesti      1 click NOI | 2 click LORO | 3 click annulla
+             4 click niente | 4000 ms azzera
+  finestra   400 ms per i click multipli
+  partita    al meglio di 5 set, serve per primo NOI
+  vincitore  4000 ms a video
+  Bluetooth  PADEL_SCORE_A31F, protocollo v1
+  associaz.  GPIO0 tenuto basso per 3000 ms apre la finestra
 --------------------------------------------------
-  Press the BOOT button to print "Hello World".
-  NOTE: holding BOOT while resetting enters
-        download mode instead of starting the app.
-        GPIO8 must stay high; GPIO9 low at reset = download mode
-==================================================
-```
-
-Poi, **una riga per ogni pressione** del pulsante BOOT:
-
-```
-Hello World
-Hello World
-Hello World
+I (233) display: ST7789 172x320 pronto, 110080 byte per l'immagine
+I (238) led: LED RGB acceso su GPIO8
+I (241) ble: in annuncio come PADEL_SCORE_A31F
 ```
 
 ---
 
 ## Come funziona
 
-`main/main.c` è composto da tre parti:
+`main/main.c` è un ciclo da cinque millisecondi che non prende nessuna decisione
+sul padel. A ogni giro:
 
-1. **`boot_button_init()`** — configura il pin BOOT come ingresso con pull-up,
-   interrupt disabilitati. Il polling avviene in un task normale, che è
-   l'unico contesto in cui `printf()` può essere chiamato senza rischi.
-2. **`print_banner()`** — stampa le informazioni di diagnostica tramite
-   `esp_chip_info()` e `esp_get_idf_version()`.
-3. **`watch_boot_button()`** — ciclo infinito con `vTaskDelay(20 ms)` che
-   campiona il pin e applica un **debounce a conteggio**: un nuovo livello
-   diventa "stabile" solo dopo 3 letture consecutive identiche
-   (`CONFIG_DEBOUNCE_SAMPLES` × `CONFIG_POLL_INTERVAL_MS` = 60 ms). La
-   transizione stabile alto → basso corrisponde alla pressione, quindi
-   `Hello World` viene stampato **una sola volta** per pressione, senza
-   ripetizioni mentre il tasto resta premuto.
+1. legge il pulsante di BOOT e lo passa al `controller`, che traduce i gesti in
+   azioni secondo la fase della partita;
+2. fa avanzare il timer della schermata del vincitore;
+3. guarda il piedino di commissioning e lascia lavorare
+   `commissioning_manager`;
+4. chiede a `ble_score_service` se il punteggio è cambiato e, se lo è, lo
+   pubblica sulla radio;
+5. disegna: la schermata di commissioning se è aperta, altrimenti il punteggio.
 
-In testa al file, prima di ogni altra cosa, ci sono tre controlli `#error`
-che confrontano la scheda selezionata con il target di build: se non
-coincidono la compilazione si ferma subito con un messaggio che indica il
-comando `idf.py set-target` da eseguire.
+Il motore del punteggio non sa che esiste un display, un pulsante o una radio:
+riceve "punto a NOI" e aggiorna lo stato. Tutto il resto guarda.
+
+Niente attese: il collegamento Bluetooth, lo schermo e il riconoscimento del
+piedino vivono nello stesso ciclo senza `delay()` e senza cicli di attesa.
 
 ### Parametri regolabili
 
-Tutti in `menuconfig` → **Board configuration** (vedi la tabella sopra), oppure
-direttamente in `sdkconfig.defaults`.
+Tutti in `menuconfig` → **Segnapunti padel** (vedi la tabella delle impostazioni
+più sopra), oppure direttamente in `sdkconfig.defaults` per le cose che devono
+valere fin dalla prima compilazione, come il Bluetooth.
 
 ---
 
@@ -429,16 +527,8 @@ Significa che:
   modalità download seriale: l'applicazione non parte e sul monitor compare
   `waiting for download`.
 
-Le combinazioni di strapping sono:
-
-| Chip | Pin del tasto | Condizione di download mode | Combinazione non valida |
-|---|---|---|---|
-| ESP32-C6 | GPIO9 | GPIO9 basso al reset | GPIO8 basso **e** GPIO9 basso |
-| ESP32-C5 | GPIO28 | GPIO28 basso al reset | GPIO27 basso **e** GPIO28 basso |
-
-Quindi premi BOOT **dopo** che la scheda si è avviata. Se ti serve resettare
-mentre lo tieni premuto, rilascia e premi **RESET** (EN) per tornare
-all'esecuzione normale.
+Lo stesso vale per il piedino del LED di bordo (GPIO8): il segnapunti lo
+configura solo a chip avviato, dopo lo schermo, e non lo tocca prima.
 
 ---
 
@@ -449,23 +539,28 @@ all'esecuzione normale.
 | Nessuna porta COM appare | Il cavo USB-C è di sola ricarica. Usa un cavo dati. |
 | `idf.py` non trovato | Non hai attivato l'ambiente: esegui il dot-source dello script `Microsoft.*.PowerShell_profile.ps1` (oppure usa `scripts\flash.ps1`). |
 | Flash ok ma niente output | Verifica in `sdkconfig` che `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`. |
-| `#error` sulla scheda in fase di build | La scheda in `menuconfig` non corrisponde al target. Esegui il comando `idf.py set-target` indicato nel messaggio. |
-| `This chip is ESP32-xx, not ESP32-yy` | Il firmware è compilato per un chip diverso da quello collegato. Verifica il modello con `python -m esptool -p COMx chip-id`. |
+| `#error` in fase di build | Il target non è l'ESP32-C6: controlla `CONFIG_IDF_TARGET` in `sdkconfig.defaults`. |
 | `waiting for download` all'avvio | Hai tenuto premuto BOOT durante il reset: premi RESET (EN) senza toccare BOOT. |
-| Più `Hello World` per una pressione | Contatto rimbalzante: aumenta `CONFIG_DEBOUNCE_SAMPLES` a 4–5. |
+| Più punti per una pressione sola | Contatto rimbalzante: alza **Rimbalzo ignorato** in menuconfig. |
 | Il monitor non risponde a Ctrl+C | Per uscire dal monitor si usa **Ctrl + ]**. |
-| `Could not detect the ESP port` | Passa la porta manualmente con `-Port COMx`. |
+| `This chip is ESP32-xx, not ESP32-yy` | Il firmware è compilato per un chip diverso da quello collegato. Verifica il modello con `python -m esptool -p COMx chip-id`. |
 
 ---
 
 ## Verifica rapida
 
-1. `.\scripts\flash.ps1` → compila, flasha e apre il monitor.
-2. Premi BOOT una volta → **una** riga `Hello World`.
-3. Tieni BOOT premuto per qualche secondo → **nessuna** riga aggiuntiva.
-4. Rilascia e premi di nuovo → **una** riga in più.
-5. `.\scripts\flash.ps1 -Action size` → firmware molto al di sotto dei limiti
-   della partizione (circa 160 KB su 1,5 MB disponibili).
+1. `.\test\run_tests.ps1` → tutti i test passano, senza scheda collegata.
+2. `scripts\flash.ps1 -Action all -Port COM18` → compila, flasha, apre il monitor.
+3. Il monitor mostra `display: ST7789 ... pronto`, `led: LED RGB acceso su GPIO8`
+   e `ble: in annuncio come PADEL_SCORE_XXXX`.
+4. Un click → 15 a NOI. Due click → 15 a LORO. Tre click → si torna indietro.
+5. Quattro secondi di pressione → la partita si azzera.
+6. Piedino GPIO0 verso massa per tre secondi → compare la schermata
+   `COMMISSIONING` con il conto alla rovescia.
+7. `cd web; npm run dev` → **COMMISSIONA SCHEDA**, si sceglie
+   `PADEL_SCORE_XXXX`, e il tabellone compare e segue i punti.
+8. `scripts\flash.ps1 -Action verify -Port COM18` → la scheda contiene
+   esattamente il programma compilato, partizione per partizione.
 
 ---
 

@@ -22,6 +22,12 @@
  * non fa spettacolo, si limita a riportare il colore indietro: chi si e'
  * corretto non deve vedersi una festa.
  *
+ * Una pagina web puo' collegarsi via Bluetooth per vedere lo stesso punteggio
+ * sul telefono o sul computer. La scheda resta lei la padrona del punteggio:
+ * manda lo stato, non lo riceve, e chi non si e' fatto riconoscere non riceve
+ * niente. Tenendo basso il piedino di commissioning per tre secondi si cancella
+ * l'associazione e si apre la finestra per associarne una nuova.
+ *
  * Il ciclo principale gira ogni 5 millisecondi. Non e' una necessita' del
  * gioco: serve al riconoscimento dei click, che deve distinguere uno, due e tre
  * click all'interno di una finestra di quattrocento millisecondi.
@@ -45,7 +51,10 @@
 #include "esp_timer.h"
 
 #include "board.h"
+#include "ble_score_service.h"
 #include "button.h"
+#include "commissioning_manager.h"
+#include "commissioning_ui.h"
 #include "controller.h"
 #include "display.h"
 #include "led_anim.h"
@@ -106,6 +115,26 @@ static void button_gpio_init(void)
 {
     const gpio_config_t io_config = {
         .pin_bit_mask = 1ULL << BOARD_BUTTON_GPIO,
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+
+    ESP_ERROR_CHECK(gpio_config(&io_config));
+}
+
+/**
+ * Prepara il piedino che apre il commissioning.
+ *
+ * Come il pulsante di gioco: ingresso con la resistenza di salita accesa, cosi'
+ * quando nessuno lo tocca legge alto e non si prende disturbi. Si abbassa verso
+ * massa per chiedere il commissioning, con un filo o con un pulsante esterno.
+ */
+static void commissioning_gpio_init(void)
+{
+    const gpio_config_t io_config = {
+        .pin_bit_mask = 1ULL << CONFIG_PADEL_COMMISSIONING_GPIO,
         .mode         = GPIO_MODE_INPUT,
         .pull_up_en   = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -256,6 +285,24 @@ void app_main(void)
     button_t button;
     button_init(&button);
 
+    /*
+     * Il Bluetooth viene per ultimo, dopo che schermo e LED sono partiti.
+     *
+     * Porta con se' il proprio compito e la propria memoria, e se qualcosa non
+     * va il segnapunti deve continuare lo stesso: anche senza pagina web si
+     * puo' giocare, e un punteggio che funziona con un Bluetooth muto e' molto
+     * meglio di una scheda che si riavvia.
+     */
+    commissioning_gpio_init();
+    commissioning_manager_init();
+    ble_score_service_init();
+    commissioning_ui_init();
+
+    ESP_LOGI(TAG, "  Bluetooth  %s, protocollo v%d",
+             commissioning_manager_device_name(), PADEL_PROTOCOL_VERSION);
+    ESP_LOGI(TAG, "  associaz.  GPIO%d tenuto basso per %d ms apre la finestra",
+             CONFIG_PADEL_COMMISSIONING_GPIO, CONFIG_PADEL_COMMISSIONING_HOLD_MS);
+
     /* Primo disegno: la partita e' appena cominciata, quindi si disegna tutto
        una volta sola. Da qui in poi cambieranno solo le zone che servono. */
     ui_view_t view;
@@ -263,6 +310,9 @@ void app_main(void)
     ui_update(&view);
 
     int64_t last_us = esp_timer_get_time();
+
+    /* Vero finche' a video c'e' la schermata di commissioning. */
+    bool commissioning_screen = false;
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
@@ -338,8 +388,35 @@ void app_main(void)
             }
         }
 
-        ui_view_build(controller_state(), &view);
-        ui_update(&view);
+        /*
+         * Il commissioning e' una cosa a se': ha il suo piedino, i suoi tempi e
+         * la sua schermata, ma vive nello stesso ciclo di tutto il resto, senza
+         * attese e senza bloccare niente.
+         */
+        const bool commissioning_low =
+            (gpio_get_level((gpio_num_t)CONFIG_PADEL_COMMISSIONING_GPIO) == 0);
+        commissioning_manager_update(commissioning_low, dt_ms);
+
+        /* Lo stato della partita si pubblica da qui, ed e' l'unico posto in cui
+           il punteggio incontra la radio. */
+        ble_score_service_update(controller_state());
+
+        if (commissioning_manager_screen_active()) {
+            commissioning_ui_update(commissioning_manager_state(),
+                                    commissioning_manager_device_name(),
+                                    commissioning_manager_short_id());
+            commissioning_screen = true;
+        } else {
+            if (commissioning_screen) {
+                /* Si torna al punteggio: la schermata di commissioning copriva
+                   tutto, quindi va rifatta da capo, intestazione compresa. */
+                commissioning_screen = false;
+                ui_invalidate();
+            }
+
+            ui_view_build(controller_state(), &view);
+            ui_update(&view);
+        }
 
 #if CONFIG_PADEL_LOG_EVENTS
         if (event != BTN_EVT_NONE) {

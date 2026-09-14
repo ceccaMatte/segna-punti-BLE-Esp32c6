@@ -63,3 +63,8 @@ void test_dirty_all(void);
 void test_ui_view_all(void);
 void test_layout_all(void);
 void test_led_anim_all(void);
+void test_ble_protocol_all(void);
+void test_device_identity_all(void);
+void test_hold_gesture_all(void);
+void test_score_state_adapter_all(void);
+void test_commissioning_state_all(void);

@@ -48,6 +48,11 @@ $sources = @(
     (Join-Path $SrcDir  'dirty.c'),
     (Join-Path $SrcDir  'ui_view.c'),
     (Join-Path $SrcDir  'led_anim.c'),
+    (Join-Path $SrcDir  'ble_protocol.c'),
+    (Join-Path $SrcDir  'device_identity.c'),
+    (Join-Path $SrcDir  'hold_gesture.c'),
+    (Join-Path $SrcDir  'score_state_adapter.c'),
+    (Join-Path $SrcDir  'commissioning_state.c'),
     (Join-Path $TestDir 'test_util.c'),
     (Join-Path $TestDir 'test_main.c'),
     (Join-Path $TestDir 'test_match.c'),
@@ -58,7 +63,12 @@ $sources = @(
     (Join-Path $TestDir 'test_dirty.c'),
     (Join-Path $TestDir 'test_ui_view.c'),
     (Join-Path $TestDir 'test_layout.c'),
-    (Join-Path $TestDir 'test_led_anim.c')
+    (Join-Path $TestDir 'test_led_anim.c'),
+    (Join-Path $TestDir 'test_ble_protocol.c'),
+    (Join-Path $TestDir 'test_device_identity.c'),
+    (Join-Path $TestDir 'test_hold_gesture.c'),
+    (Join-Path $TestDir 'test_score_state_adapter.c'),
+    (Join-Path $TestDir 'test_commissioning_state.c')
 )
 
 foreach ($source in $sources) {

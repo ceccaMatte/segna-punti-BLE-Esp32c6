@@ -1,0 +1,248 @@
+/*
+ * Gli stessi colori dello schermo della scheda: verde per LORO, azzurro per
+ * NOI, fondo scuro. Non e' un vezzo: chi guarda la scheda e la pagina insieme
+ * deve riconoscere subito le stesse due squadre.
+ */
+
+:root {
+  --bg: #0b0f14;
+  --panel: #141a22;
+  --edge: #2c3644;
+  --text: #ecf2f8;
+  --label: #7e8c9e;
+  --dim: #546070;
+  --loro: #3ad88a;
+  --noi: #4abcfc;
+  --warn: #fabd3c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+.page-head h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.subtitle {
+  margin: 0 0 24px;
+  max-width: 70ch;
+  color: var(--label);
+}
+
+.layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+/* --- stato ---------------------------------------------------------------- */
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.status .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.status-ok .dot {
+  background: var(--loro);
+}
+
+.status-warn .dot {
+  background: var(--warn);
+}
+
+/* --- elenchi di fatti ----------------------------------------------------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.facts dt {
+  color: var(--label);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- messaggi e pulsanti -------------------------------------------------- */
+
+.message {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(250, 189, 60, 0.12);
+  border: 1px solid rgba(250, 189, 60, 0.35);
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+button {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+  background: #1b2330;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--label);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: #1d4f6d;
+  border-color: #2c7ba5;
+}
+
+/* --- tabellone ------------------------------------------------------------ */
+
+.board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.side {
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  padding: 12px;
+  background: #10161e;
+}
+
+.side-loro {
+  border-color: rgba(58, 216, 138, 0.5);
+}
+
+.side-noi {
+  border-color: rgba(74, 188, 252, 0.5);
+}
+
+.side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.side-loro .side-name {
+  color: var(--loro);
+}
+
+.side-noi .side-name {
+  color: var(--noi);
+}
+
+.serve-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.side-points {
+  margin: 8px 0 4px;
+  font-size: 48px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.side-counters {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  color: var(--label);
+  font-size: 13px;
+}
+
+.board-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--edge);
+  font-size: 12px;
+  color: var(--label);
+}
+
+.badge-tb {
+  color: var(--warn);
+  border-color: rgba(250, 189, 60, 0.5);
+}
+
+.badge-win {
+  color: var(--loro);
+  border-color: rgba(58, 216, 138, 0.5);
+}
+
+.page-foot {
+  margin-top: 24px;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+code {
+  color: var(--label);
+}

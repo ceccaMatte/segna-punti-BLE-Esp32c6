@@ -21,6 +21,11 @@ int main(void)
     test_ui_view_all();
     test_layout_all();
     test_led_anim_all();
+    test_ble_protocol_all();
+    test_device_identity_all();
+    test_hold_gesture_all();
+    test_score_state_adapter_all();
+    test_commissioning_state_all();
 
     return test_summary();
 }

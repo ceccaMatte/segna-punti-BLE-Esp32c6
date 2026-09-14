@@ -38,6 +38,48 @@ menu "Segnapunti padel"
             Un WS2812 tenuto al massimo acceca: a mezzo metro e' fastidioso da
             guardare e di sera illumina la stanza. A zero il LED resta spento.
 
+    comment "Bluetooth e commissioning"
+
+    config PADEL_COMMISSIONING_GPIO
+        int "Piedino che apre la finestra di commissioning"
+        default 0
+        range 0 30
+        help
+            Tenuto verso massa per il tempo indicato qui sotto, questo piedino
+            cancella l'associazione salvata e riapre la finestra per associare
+            una pagina web nuova.
+
+            Sulla scheda il piedino 0 e' libero: il display usa 6, 7, 14, 15,
+            21 e 22, la microSD 4 e 5, il LED di bordo l'8 e il pulsante di
+            gioco il 9. Non e' nemmeno uno dei piedini che il chip legge
+            all'accensione, quindi non disturba l'avvio.
+
+    config PADEL_COMMISSIONING_HOLD_MS
+        int "Tenuta per aprire la finestra (ms)"
+        default 3000
+        range 500 20000
+        help
+            Per quanto il piedino deve restare verso massa prima che la
+            finestra si apra. Il gesto scatta una volta sola: il piedino deve
+            tornare alto, e solo dopo si puo' richiedere una nuova finestra.
+
+    config PADEL_COMMISSIONING_WINDOW_MS
+        int "Durata della finestra (ms)"
+        default 60000
+        range 5000 600000
+        help
+            Per quanto la scheda resta disponibile ad accettare una nuova
+            associazione. Scaduta la finestra si torna a giocare e la scheda
+            resta non associata, com'era prima.
+
+    config PADEL_COMMISSIONING_NOTICE_MS
+        int "Durata dell'esito a video (ms)"
+        default 2000
+        range 500 10000
+        help
+            Per quanto resta a video l'esito del commissioning, prima che lo
+            schermo torni al punteggio.
+
     comment "Pulsante"
 
     config PADEL_BUTTON_DEBOUNCE_MS
