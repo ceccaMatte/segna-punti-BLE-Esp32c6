@@ -496,7 +496,11 @@ public static class FontGen
             output.AppendLine();
         }
 
-        return output.ToString();
+        /* AppendLine usa il fine riga del sistema: su Windows scriverebbe CRLF,
+           mentre i dati qui sopra sono scritti in LF. Il file risulterebbe
+           meta' e meta', quindi si normalizza tutto qui in un colpo solo,
+           invece di sostituire a mano ogni singola riga. */
+        return output.ToString().Replace("\r\n", "\n");
     }
 
     private static string Escape(string text)
@@ -525,8 +529,16 @@ if ('FontGen' -as [type]) {
 # Specifiche dei font
 # ---------------------------------------------------------------------------
 
-# Il pannello del punteggio e' largo 81 px: togliendo i margini restano 73 px
-# utili, ed e' questo il vincolo di larghezza per le cifre grandi.
+# Larghezza su cui si dimensionano le cifre grandi.
+#
+# Il pannello del punteggio e' largo 82 px e il margine interno ne toglie 3 per
+# lato, quindi in teoria ce ne starebbero 76. Qui si usa 73, piu' prudente di
+# tre pixel, perche' attorno alle cifre viene disegnato un alone che sporge di
+# un pixel per lato e perche' il testo non deve arrivare a toccare la cornice.
+#
+# I due valori devono restare coerenti: questo e UI_SCORE_MAX_W in
+# main/ui_view.h. Ad accorgersi se si allontanano e' test/test_layout.c, che
+# rimisura tutto con le metriche vere.
 $scoreWidth  = 73
 $scoreChars  = '0123456789AD'
 $labelChars  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -'
