@@ -2,6 +2,20 @@
  * @file ble_score_service.c
  * @brief Pubblicazione dello stato della partita.
  *
+ * Le pubblicazioni sono di due tipi, e si riconoscono dalla funzione che le
+ * manda:
+ *
+ *   - ble_score_service_update(): il giro normale. Guarda se lo stato e'
+ *     cambiato e, se non lo e', si limita a un battito ogni tanto. E' il
+ *     battito che fa accorgere la pagina di un riavvio in pochi secondi.
+ *   - ble_score_service_publish_event(): il gesto. Parte subito, anche se lo
+ *     stato non e' cambiato, e porta il nome di quello che e' successo.
+ *
+ * Le due copie che escono da deliver() hanno lo stesso stato e due eventi
+ * diversi: la notifica porta il gesto, la risposta a chi *legge* porta
+ * STATE_SYNC. Chi legge non ha perso nessuna notizia — sta chiedendo com'e' la
+ * partita — e l'ultimo gesto di mezz'ora prima non lo riguarda.
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -45,7 +59,9 @@ static uint32_t s_auth_marker;
 /** Millisecondi dall'ultima pubblicazione, battiti compresi. */
 static uint32_t s_since_publish_ms;
 
-static uint8_t s_encoded[PADEL_SCORE_PACKET_SIZE];
+/** I byte della notifica e quelli che si risponde a chi legge. Vedi deliver(). */
+static uint8_t s_notify_bytes[PADEL_SCORE_PACKET_SIZE];
+static uint8_t s_read_bytes[PADEL_SCORE_PACKET_SIZE];
 
 void ble_score_service_init(void)
 {
@@ -53,6 +69,38 @@ void ble_score_service_init(void)
     s_sequence = 0u;
     s_auth_marker = commissioning_manager_auth_marker();
     s_since_publish_ms = 0u;
+}
+
+/**
+ * Consegna un pacchetto alla radio, nelle sue due copie.
+ *
+ * La copia da notificare porta l'evento: dice a chi era collegato *perche'* e'
+ * arrivato il pacchetto. La copia che si risponde a chi legge la
+ * characteristic porta STATE_SYNC: chi legge sta chiedendo com'e' la partita,
+ * e non deve vedere un gesto vecchio come se fosse appena successo.
+ */
+static void deliver(const padel_score_packet_t *state, padel_event_t event)
+{
+    padel_score_packet_t outgoing = *state;
+    outgoing.event = (uint8_t)event;
+
+    padel_score_packet_t readable = *state;
+    readable.event = (uint8_t)PADEL_EVT_STATE_SYNC;
+
+    (void)padel_score_encode(&outgoing, s_notify_bytes, sizeof(s_notify_bytes));
+    (void)padel_score_encode(&readable, s_read_bytes, sizeof(s_read_bytes));
+
+    ble_gatt_set_score(s_read_bytes, sizeof(s_read_bytes));
+
+    /* A nessuno che non si sia fatto riconoscere si racconta la partita. */
+    if (!commissioning_manager_authenticated()) {
+        return;
+    }
+
+    if (ble_gatt_notify_score(s_notify_bytes, sizeof(s_notify_bytes))) {
+        ESP_LOGD(TAG, "pubblicato lo snapshot %u, evento %u",
+                 (unsigned)outgoing.sequence, (unsigned)event);
+    }
 }
 
 void ble_score_service_update(const MatchState *match, uint32_t dt_ms)
@@ -65,7 +113,7 @@ void ble_score_service_update(const MatchState *match, uint32_t dt_ms)
      * tiene aggiornato lo stato che si risponde a chi legge.
      */
     padel_score_packet_t next;
-    score_adapter_build(match, (uint16_t)(s_sequence + 1u), &next);
+    score_adapter_build(match, (uint16_t)(s_sequence + 1u), PADEL_EVT_NONE, &next);
 
     const bool changed = !s_have_current || !score_adapter_same(&s_current, &next);
 
@@ -85,31 +133,48 @@ void ble_score_service_update(const MatchState *match, uint32_t dt_ms)
     s_since_publish_ms = 0u;
     s_auth_marker = commissioning_manager_auth_marker();
 
-    padel_score_packet_t outgoing = next;
+    /* Lo stato salvato e' quello vero, senza il bit del battito e senza
+       l'evento: altrimenti il confronto successivo vedrebbe un cambiamento
+       che non c'e'. */
+    s_current = next;
+    s_have_current = true;
 
     if (heartbeat) {
         /* Il battito non porta un numero nuovo: chi lo riceve sa che non e'
            cambiato niente, e non lo conta come un secondo pacchetto. */
-        outgoing.flags |= PADEL_FLAG_HEARTBEAT;
-        outgoing.sequence = s_current.sequence;
-    } else {
-        s_sequence = next.sequence;
+        next.sequence = s_sequence;
+        next.flags |= PADEL_FLAG_HEARTBEAT;
+        deliver(&next, PADEL_EVT_NONE);
+        return;
     }
 
-    /* Lo stato salvato e' sempre quello vero, senza il bit del battito:
-       altrimenti il confronto successivo vedrebbe un cambiamento che non c'e'. */
-    s_current = next;
+    s_sequence = next.sequence;
+
+    /* Chi si e' appena fatto riconoscere riceve lo stato marcato come
+       sincronizzazione; un cambiamento che non viene da un gesto — per esempio
+       l'azzeramento automatico dopo la schermata del vincitore — viaggia senza
+       evento. */
+    deliver(&next, newcomer ? PADEL_EVT_STATE_SYNC : PADEL_EVT_NONE);
+}
+
+void ble_score_service_publish_event(const MatchState *match, padel_event_t event)
+{
+    padel_score_packet_t packet;
+    score_adapter_build(match, (uint16_t)(s_sequence + 1u), event, &packet);
+
+    /* La pubblicazione forzata e' una notizia: parte adesso, con un numero
+       nuovo, e sposta anche il battito — non serve ripetere fra un secondo lo
+       stato che si e' appena mandato. */
+    s_sequence = packet.sequence;
+    s_since_publish_ms = 0u;
     s_have_current = true;
 
-    (void)padel_score_encode(&outgoing, s_encoded, sizeof(s_encoded));
-    ble_gatt_set_score(s_encoded, sizeof(s_encoded));
+    /* Lo stato salvato non porta l'evento: serve al confronto, e il confronto
+       guarda la partita. */
+    s_current = packet;
+    s_current.event = (uint8_t)PADEL_EVT_NONE;
 
-    /* A nessuno che non si sia fatto riconoscere si racconta la partita. */
-    if (commissioning_manager_authenticated()) {
-        if (ble_gatt_notify_score()) {
-            ESP_LOGD(TAG, "pubblicato lo snapshot %u", (unsigned)s_sequence);
-        }
-    }
+    deliver(&packet, event);
 }
 
 uint16_t ble_score_service_sequence(void)

@@ -84,6 +84,10 @@ size_t padel_score_encode(const padel_score_packet_t *packet, uint8_t *out, size
     put_u16(&out[12], packet->tb_points[0]);
     put_u16(&out[14], packet->tb_points[1]);
 
+    /* L'evento sta in coda, fuori dai sedici byte storici: vedi
+       PADEL_SCORE_PACKET_SIZE. */
+    out[16] = packet->event;
+
     return PADEL_SCORE_PACKET_SIZE;
 }
 
@@ -107,6 +111,7 @@ bool padel_score_decode(const uint8_t *in, size_t in_size, padel_score_packet_t 
 
     out->tb_points[0] = get_u16(&in[12]);
     out->tb_points[1] = get_u16(&in[14]);
+    out->event        = in[16];
 
     return true;
 }

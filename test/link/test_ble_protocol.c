@@ -22,7 +22,7 @@ static void test_dimensioni(void)
     test_begin(name);
 
     /* Numeri scritti a mano di proposito: sono parte del contratto. */
-    CHECK_EQ(PADEL_SCORE_PACKET_SIZE, 16);
+    CHECK_EQ(PADEL_SCORE_PACKET_SIZE, 17);
     CHECK_EQ(PADEL_STATUS_PACKET_SIZE, 6);
     CHECK_EQ(PADEL_DEVICE_INFO_SIZE, 8);
     CHECK_EQ(PADEL_CONTROL_PACKET_SIZE, 17);
@@ -53,6 +53,7 @@ static void test_codifica_stato_byte_per_byte(void)
     packet.sets[1] = 2u;
     packet.tb_points[0] = 6u;
     packet.tb_points[1] = 7u;
+    packet.event = (uint8_t)PADEL_EVT_MOMENT;
 
     uint8_t buffer[PADEL_SCORE_PACKET_SIZE];
     CHECK_EQ(padel_score_encode(&packet, buffer, sizeof(buffer)), PADEL_SCORE_PACKET_SIZE);
@@ -73,6 +74,49 @@ static void test_codifica_stato_byte_per_byte(void)
     CHECK_EQ(buffer[13], 0);
     CHECK_EQ(buffer[14], 7);     /* tie-break NOI */
     CHECK_EQ(buffer[15], 0);
+    CHECK_EQ(buffer[16], PADEL_EVT_MOMENT); /* in coda: perche' e' partito */
+
+    test_end(name);
+}
+
+static void test_eventi_in_coda(void)
+{
+    const char *name = "protocollo: tutti gli eventi entrano in un byte";
+    test_begin(name);
+
+    /*
+     * Gli otto valori del campo event, scritti a mano di proposito: sono
+     * parte del contratto, e lo stesso elenco esiste in
+     * web/src/ble/protocol.ts. Un valore nuovo deve trovare posto qui, e
+     * questo controllo e' il posto dove viene notato.
+     */
+    const padel_event_t events[] = {
+        PADEL_EVT_NONE,
+        PADEL_EVT_OUR_POINT,
+        PADEL_EVT_THEIR_POINT,
+        PADEL_EVT_UNDO,
+        PADEL_EVT_MOMENT,
+        PADEL_EVT_START_PAIRING,
+        PADEL_EVT_RESET,
+        PADEL_EVT_STATE_SYNC,
+    };
+
+    CHECK_EQ(PADEL_EVT_NONE, 0);
+    CHECK_EQ(PADEL_EVT_STATE_SYNC, 7);
+
+    for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); ++i) {
+        padel_score_packet_t packet = { 0 };
+        packet.event = (uint8_t)events[i];
+        packet.winner = PADEL_WINNER_NONE;
+
+        uint8_t buffer[PADEL_SCORE_PACKET_SIZE];
+        CHECK_EQ(padel_score_encode(&packet, buffer, sizeof(buffer)),
+                 PADEL_SCORE_PACKET_SIZE);
+
+        padel_score_packet_t read_back;
+        CHECK(padel_score_decode(buffer, sizeof(buffer), &read_back));
+        CHECK_EQ(read_back.event, events[i]);
+    }
 
     test_end(name);
 }
@@ -123,6 +167,7 @@ static void test_andata_e_ritorno(void)
     original.sets[1] = 2u;
     original.tb_points[0] = 102u;
     original.tb_points[1] = 100u;
+    original.event = (uint8_t)PADEL_EVT_START_PAIRING;
 
     uint8_t buffer[PADEL_SCORE_PACKET_SIZE];
     CHECK_EQ(padel_score_encode(&original, buffer, sizeof(buffer)), PADEL_SCORE_PACKET_SIZE);
@@ -141,6 +186,7 @@ static void test_andata_e_ritorno(void)
     CHECK_EQ(read_back.sets[1], original.sets[1]);
     CHECK_EQ(read_back.tb_points[0], original.tb_points[0]);
     CHECK_EQ(read_back.tb_points[1], original.tb_points[1]);
+    CHECK_EQ(read_back.event, original.event);
 
     test_end(name);
 }
@@ -297,6 +343,7 @@ void test_ble_protocol_all(void)
 
     test_dimensioni();
     test_codifica_stato_byte_per_byte();
+    test_eventi_in_coda();
     test_battito();
     test_andata_e_ritorno();
     test_stato_rifiutato_se_non_valido();

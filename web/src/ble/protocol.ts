@@ -29,8 +29,15 @@ export const PROTOCOL_VERSION = 1;
 /** Lunghezza del token di associazione. */
 export const TOKEN_LENGTH = 16;
 
-/** Lunghezze attese dei pacchetti. */
-export const SCORE_PACKET_SIZE = 16;
+/**
+ * Lunghezze attese dei pacchetti.
+ *
+ * Il pacchetto della partita e' cresciuto di un byte: l'ultimo dice che cosa
+ * ha provocato l'invio. I sedici byte di prima sono rimasti dove erano, e la
+ * versione del protocollo non cambia apposta: chi legge i campi che conosce li
+ * trova al loro posto.
+ */
+export const SCORE_PACKET_SIZE = 17;
 export const STATUS_PACKET_SIZE = 6;
 export const DEVICE_INFO_SIZE = 8;
 export const CONTROL_PACKET_SIZE = 1 + TOKEN_LENGTH;
@@ -66,6 +73,50 @@ export enum ControlOp {
   Auth = 0x02,
 }
 
+/**
+ * Che cosa ha provocato la pubblicazione di uno snapshot della partita.
+ *
+ * E' il gemello di `padel_event_t` in `main/link/ble_protocol.h`: stessi
+ * numeri, stessi nomi. I gesti del pulsante e gli eventi di servizio stanno
+ * nella stessa enumerazione perche' viaggiano nello stesso byte.
+ */
+export enum PadelEvent {
+  /** Nessun gesto: un battito, oppure uno stato cambiato da solo. */
+  None = 0,
+  OurPoint = 1,
+  TheirPoint = 2,
+  Undo = 3,
+  /** Pressione lunga rilasciata: un segno nel tempo, non un punto. */
+  Moment = 4,
+  /** La scheda sta per aprire una nuova finestra di commissioning. */
+  StartPairing = 5,
+  Reset = 6,
+  /** Sincronizzazione: non un gesto, ma "questo e' lo stato adesso". */
+  StateSync = 7,
+}
+
+/**
+ * I nomi degli eventi, come li scrive il protocollo.
+ *
+ * Sono gli stessi nomi del firmware e restano in inglese: sono nomi di
+ * protocollo, non parole dell'interfaccia. Servono ai log e alla diagnostica,
+ * dove "Last event: OUR_POINT" e' quello che si vuole leggere.
+ */
+const EVENT_NAMES = [
+  'NONE',
+  'OUR_POINT',
+  'THEIR_POINT',
+  'UNDO',
+  'MOMENT',
+  'START_PAIRING',
+  'RESET',
+  'STATE_SYNC',
+];
+
+export function eventName(event: number): string {
+  return EVENT_NAMES[event] ?? `EVENTO ${event}`;
+}
+
 /** Bit di stato del pacchetto della partita. */
 export const FLAG_TIE_BREAK = 0x01;
 export const FLAG_FINISHED = 0x02;
@@ -94,6 +145,8 @@ export const SIDE_NOI = 1;
 export interface ScoreStatePacket {
   /** Numero dello snapshot: cresce a ogni cambiamento di stato. */
   sequence: number;
+  /** Che cosa ha provocato questo pacchetto (PadelEvent). */
+  event: PadelEvent;
   /** Vero se e' solo un battito: lo stato e' quello di prima. */
   heartbeat: boolean;
   tieBreak: boolean;
@@ -161,6 +214,7 @@ export function decodeScoreState(dv: DataView): ScoreStatePacket {
 
   return {
     sequence: dv.getUint16(4, true),
+    event: dv.getUint8(16) as PadelEvent,
     heartbeat: (flags & FLAG_HEARTBEAT) !== 0,
     tieBreak: (flags & FLAG_TIE_BREAK) !== 0,
     finished: (flags & FLAG_FINISHED) !== 0,

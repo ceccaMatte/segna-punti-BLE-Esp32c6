@@ -33,13 +33,20 @@ import {
   type DeviceInfoPacket,
   type ScoreStatePacket,
 } from './protocol';
+import { toHex } from './hex';
 
 export interface ClientEvents {
   onConnected?: (device: { name: string; id: string }) => void;
   onDisconnected?: () => void;
   onDeviceInfo?: (info: DeviceInfoPacket) => void;
   onStatus?: (status: CommissioningStatusPacket) => void;
-  onScore?: (score: ScoreStatePacket) => void;
+  /**
+   * Un aggiornamento della partita.
+   *
+   * @param raw i byte come sono arrivati, in esadecimale: la diagnostica li
+   *            mostra per intero quando un campo non torna.
+   */
+  onScore?: (score: ScoreStatePacket, raw: string) => void;
   onError?: (message: string) => void;
 }
 
@@ -353,7 +360,10 @@ export class PadelBleClient {
         return;
       }
       try {
-        this.listeners.onScore?.(decodeScoreState(value));
+        const raw = toHex(
+          new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+        );
+        this.listeners.onScore?.(decodeScoreState(value), raw);
       } catch (error) {
         this.report(error);
       }

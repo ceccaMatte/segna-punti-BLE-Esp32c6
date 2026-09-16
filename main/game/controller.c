@@ -50,7 +50,7 @@ void controller_set_finished_ms(uint32_t ms)
     s_finished_duration_ms = ms;
 }
 
-void controller_handle_event(btn_event_t evt)
+bool controller_handle_event(btn_event_t evt)
 {
     s_action = CTRL_ACTION_NONE;
 
@@ -78,18 +78,24 @@ void controller_handle_event(btn_event_t evt)
         }
         break;
 
-    case BTN_EVT_LONG:
+    case BTN_EVT_QUADRUPLE:
         /* reset immediato, anche dalla schermata del vincitore */
         match_reset();
         s_action = CTRL_ACTION_RESET;
         break;
 
+    case BTN_EVT_MOMENT:
+    case BTN_EVT_PAIRING:
     case BTN_EVT_NONE:
     default:
+        /* Non sono gesti di gioco: chi smista li manda altrove. Se arrivassero
+           qui non ci sarebbe niente da fare, ed e' quello che succede. */
         break;
     }
 
     controller_sync_phase();
+
+    return s_action != CTRL_ACTION_NONE;
 }
 
 controller_action_t controller_take_action(void)

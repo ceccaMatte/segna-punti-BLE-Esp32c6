@@ -61,14 +61,22 @@ void controller_set_finished_ms(uint32_t ms);
 /**
  * @brief Applica un evento del pulsante secondo la fase corrente.
  *
- * | Fase     | SINGLE | DOUBLE | TRIPLE            | LONG          |
+ * | Fase     | SINGLE | DOUBLE | TRIPLE            | QUADRUPLE     |
  * |----------|--------|--------|-------------------|---------------|
  * | PLAYING  | NOI    | LORO   | UNDO              | RESET         |
  * | FINISHED | ignore | ignore | UNDO della palla  | RESET subito  |
  *
+ * MOMENT e PAIRING non compaiono nella tabella perche' non sono gesti di
+ * gioco: li smista il ciclo principale senza passare di qui, e a questo modulo
+ * non serve saperne niente.
+ *
  * Dopo ogni evento la fase viene ricalcolata da MatchState.finished.
+ *
+ * @return true se l'evento ha prodotto qualcosa. Serve a chi pubblica lo stato
+ *         verso la pagina web: un click ignorato perche' la partita e' finita
+ *         non deve arrivare come un evento che non c'e' stato.
  */
-void controller_handle_event(btn_event_t evt);
+bool controller_handle_event(btn_event_t evt);
 
 /**
  * @brief Fa avanzare il timer della schermata finale.

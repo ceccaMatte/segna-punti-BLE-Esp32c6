@@ -21,7 +21,15 @@
 static padel_score_packet_t snapshot(uint16_t sequence)
 {
     padel_score_packet_t packet;
-    score_adapter_build(match_state(), sequence, &packet);
+    score_adapter_build(match_state(), sequence, PADEL_EVT_NONE, &packet);
+    return packet;
+}
+
+/** Come snapshot(), ma con il motivo che si vuole provare. */
+static padel_score_packet_t snapshot_event(uint16_t sequence, padel_event_t event)
+{
+    padel_score_packet_t packet;
+    score_adapter_build(match_state(), sequence, event, &packet);
     return packet;
 }
 
@@ -59,6 +67,9 @@ static void test_stato_iniziale(void)
     CHECK_EQ(packet.sequence, 7);
     CHECK_EQ(packet.flags, PADEL_FLAG_SERVING_NOI);
     CHECK_EQ(packet.winner, PADEL_WINNER_NONE);
+
+    /* Senza gesti da raccontare il pacchetto non annuncia niente. */
+    CHECK_EQ(packet.event, PADEL_EVT_NONE);
 
     for (uint8_t side = 0; side < 2u; ++side) {
         CHECK_EQ(packet.points[side], PT_0);
@@ -207,6 +218,35 @@ static void test_annullamento(void)
     test_end(name);
 }
 
+static void test_evento(void)
+{
+    const char *name = "adattatore: il motivo per cui parte il pacchetto";
+    test_begin(name);
+
+    match_init(TEAM_US);
+    match_score(TEAM_US);
+
+    /*
+     * La partita e' la stessa; cambia solo il motivo per cui il pacchetto
+     * parte. Il motivo non e' una proprieta' dello stato e non si puo'
+     * dedurre dai numeri, quindi lo dice chi pubblica: e' l'unico modo per
+     * distinguere un MOMENT da un battito a parita' di punteggio.
+     */
+    const padel_score_packet_t point  = snapshot_event(1u, PADEL_EVT_OUR_POINT);
+    const padel_score_packet_t moment = snapshot_event(2u, PADEL_EVT_MOMENT);
+
+    CHECK_EQ(point.event, PADEL_EVT_OUR_POINT);
+    CHECK_EQ(moment.event, PADEL_EVT_MOMENT);
+
+    /* Le due pubblicazioni raccontano la stessa partita: il confronto guarda
+       la partita, non il motivo ne' il numero di sequenza. Senza questa
+       esclusione un MOMENT — che non cambia il punteggio — sembrerebbe un
+       cambiamento a ogni giro del ciclo principale. */
+    CHECK(score_adapter_same(&point, &moment));
+
+    test_end(name);
+}
+
 static void test_confronto(void)
 {
     const char *name = "adattatore: due pacchetti uguali si riconoscono";
@@ -243,14 +283,14 @@ static void test_motore_assente(void)
     test_begin(name);
 
     padel_score_packet_t packet;
-    score_adapter_build(NULL, 12u, &packet);
+    score_adapter_build(NULL, 12u, PADEL_EVT_NONE, &packet);
 
     CHECK_EQ(packet.sequence, 12);
     CHECK_EQ(packet.winner, PADEL_WINNER_NONE);
     CHECK_EQ(packet.flags, 0);
 
     /* Anche con un pacchetto nullo non deve succedere niente. */
-    score_adapter_build(match_state(), 1u, NULL);
+    score_adapter_build(match_state(), 1u, PADEL_EVT_NONE, NULL);
 
     test_end(name);
 }
@@ -267,6 +307,7 @@ void test_score_state_adapter_all(void)
     test_tie_break();
     test_partita_finita();
     test_annullamento();
+    test_evento();
     test_confronto();
     test_motore_assente();
 

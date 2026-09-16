@@ -24,16 +24,24 @@
  *
  * @param match    stato del motore, in sola lettura.
  * @param sequence numero dello snapshot, deciso da chi pubblica.
+ * @param event    che cosa ha provocato questa pubblicazione (::padel_event_t):
+ *                 il motivo non e' una proprieta' della partita e non puo'
+ *                 essere dedotto dallo stato — due pubblicazioni identiche
+ *                 possono nascere da un punto e da un annullamento — quindi
+ *                 lo dice chi pubblica.
  * @param out      pacchetto da riempire.
  */
-void score_adapter_build(const MatchState *match, uint16_t sequence, padel_score_packet_t *out);
+void score_adapter_build(const MatchState *match, uint16_t sequence,
+                         padel_event_t event, padel_score_packet_t *out);
 
 /**
  * @brief Vero se i due pacchetti raccontano la stessa partita.
  *
- * Il numero di sequenza non conta: serve proprio a distinguere due
- * pubblicazioni dello stesso stato. Il confronto dice se c'e' qualcosa di nuovo
- * da mandare, ed e' quello che permette di non disturbare la radio quando non
- * e' cambiato niente.
+ * Non contano il numero di sequenza (serve proprio a distinguere due
+ * pubblicazioni dello stesso stato) ne' l'evento (dice perche' si e' partiti,
+ * non com'e' la partita): il confronto dice se c'e' qualcosa di nuovo da
+ * mandare, ed e' quello che permette di non disturbare la radio quando non e'
+ * cambiato niente. Senza questa esclusione un MOMENT, che non cambia il
+ * punteggio, sembrerebbe un cambiamento a ogni giro del ciclo.
  */
 bool score_adapter_same(const padel_score_packet_t *a, const padel_score_packet_t *b);

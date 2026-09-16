@@ -103,30 +103,48 @@ menu "Segnapunti padel"
             Alzandola si diventa piu' tolleranti con chi clicca piano, ma il
             punteggio cambia con piu' ritardo.
 
-    config PADEL_LONG_PRESS_MS
-        int "Pressione lunga per l'azzeramento (ms)"
-        default 4000
-        range 1000 10000
+    config PADEL_MOMENT_MIN_MS
+        int "Pressione minima per il MOMENT (ms)"
+        default 800
+        range 300 4000
         help
-            Tenendo premuto per questo tempo la partita viene azzerata. Durante
-            la pressione lunga i click gia' contati vengono scartati: l'unico
-            effetto e' l'azzeramento.
+            Una pressione rilasciata dopo questo tempo non e' un click: e' un
+            MOMENT, cioe' un segno nel tempo che non tocca il punteggio. Il
+            gesto si decide al rilascio, quindi tenendo premuto piu' a lungo si
+            puo' ancora arrivare alla soglia del commissioning.
 
-    config PADEL_BUTTON_COMMISSION_MS
-        int "Pressione prolungata per il commissioning (ms)"
-        default 6000
-        range 2000 30000
+            Sotto questo tempo la pressione entra nella conta dei click, che
+            distingue uno, due, tre e quattro click.
+
+    config PADEL_PAIRING_HOLD_MS
+        int "Pressione per aprire il commissioning (ms)"
+        default 5000
+        range 1500 30000
         help
-            Non fermandosi all'azzeramento si arriva a questa seconda soglia,
-            che apre la finestra di commissioning: l'associazione salvata
+            Tenendo premuto fino a questa soglia la finestra di commissioning
+            si apre subito, senza aspettare il rilascio: l'associazione salvata
             viene cancellata e la scheda torna disponibile per una pagina web
             nuova.
 
             Serve a chi non vuole attaccare un pulsante o un filo al piedino di
             commissioning: lo stesso gesto si fa con l'unico tasto di bordo,
-            che e' li' sotto il pollice. Deve essere maggiore del tempo di
-            azzeramento: con i due valori invertiti la compilazione si ferma
-            con un errore, invece di lasciare un gesto che non si distingue.
+            che e' li' sotto il pollice. Deve essere maggiore della soglia del
+            MOMENT: con i due valori invertiti la compilazione si ferma con un
+            errore, invece di lasciare un gesto che non si distingue.
+
+    config PADEL_HOLD_HINT_MS
+        int "Avviso durante la pressione lunga (ms)"
+        default 3000
+        range 1000 4500
+        help
+            Da quanto il pulsante e' tenuto premuto prima che lo schermo mostri
+            l'avviso che, continuando, si apre il commissioning. Senza, chi
+            tiene premuto non ha modo di sapere che il gesto e' cominciato: lo
+            scoprirebbe solo al rilascio, quando ormai e' tardi.
+
+            Deve stare fra la soglia del MOMENT e quella del commissioning:
+            prima non c'e' niente da annunciare, dopo la finestra si e' gia'
+            aperta.
 
     config PADEL_FINAL_SCREEN_MS
         int "Durata della schermata del vincitore (ms)"
@@ -136,7 +154,7 @@ menu "Segnapunti padel"
             Per quanto resta a video chi ha vinto, prima che la partita
             ricominci da sola. In questo tempo si puo' ancora annullare la
             palla che ha chiuso il match con tre click, oppure azzerare subito
-            tenendo premuto.
+            con quattro click.
 
     comment "Partita"
 

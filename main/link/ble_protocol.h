@@ -70,6 +70,72 @@ typedef enum {
 } padel_message_type_t;
 
 /* -------------------------------------------------------------------------- */
+/* Eventi                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Che cosa ha provocato la pubblicazione di uno snapshot.
+ *
+ * Viaggia nel primo byte libero del pacchetto della partita, in coda ai campi
+ * storici, e non tocca nessuno di quelli: chi sa leggere un pacchetto di sedici
+ * byte trova gli stessi numeri nello stesso posto, e in piu' il motivo per cui
+ * e' arrivato.
+ *
+ * La regola, e vale la pena di scriverla perche' e' tutta qui la semantica del
+ * campo: ``event`` dice *perche'* e' partito il pacchetto, tutto il resto dice
+ * com'e' la partita *dopo* quell'evento. Chi riceve non applica niente: lo
+ * stato che legge e' gia' quello giusto.
+ *
+ * I nomi sono in inglese perche' sono nomi di protocollo, non parole
+ * dell'interfaccia: gli stessi valori sono definiti anche in
+ * ``web/src/ble/protocol.ts``, e i test dei due lati usano gli stessi esempi.
+ */
+typedef enum {
+    /**
+     * Nessun gesto.
+     *
+     * Accompagna il battito e i cambiamenti che non vengono da un gesto (per
+     * esempio l'azzeramento automatico dopo la schermata del vincitore): chi
+     * riceve non deve mostrare nessun evento, solo lo stato.
+     */
+    PADEL_EVT_NONE = 0,
+
+    PADEL_EVT_OUR_POINT   = 1, /**< un click: punto a NOI                  */
+    PADEL_EVT_THEIR_POINT = 2, /**< due click: punto a LORO                */
+    PADEL_EVT_UNDO        = 3, /**< tre click: annullata l'ultima azione   */
+
+    /**
+     * Pressione lunga, rilasciata oltre la soglia breve.
+     *
+     * Non e' un gesto di gioco e non tocca il punteggio: serve a chi, fuori
+     * dalla scheda, vorra' mettere un segno nel tempo (un marker sul video).
+     * Lo stato che accompagna il pacchetto e' quello in cui il marker e'
+     * stato chiesto.
+     */
+    PADEL_EVT_MOMENT = 4,
+
+    /**
+     * La pressione ha raggiunto la soglia del pairing.
+     *
+     * Esce, se la connessione e' viva e riconosciuta, subito *prima* che la
+     * scheda cancelli l'associazione e apra la finestra di commissioning: la
+     * pagina collegata sa cosi' perche' sta per perdere le notifiche.
+     */
+    PADEL_EVT_START_PAIRING = 5,
+
+    PADEL_EVT_RESET = 6, /**< quattro click: partita azzerata              */
+
+    /**
+     * Non e' un gesto: e' la sincronizzazione.
+     *
+     * Accompagna i pacchetti che servono a mettersi in pari — appena una
+     * pagina si e' fatta riconoscere, o quando legge lo stato — e dice a chi
+     * riceve che quello e' lo stato corrente, non la notizia di qualcosa.
+     */
+    PADEL_EVT_STATE_SYNC = 7
+} padel_event_t;
+
+/* -------------------------------------------------------------------------- */
 /* Committente e autenticazione                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -108,14 +174,20 @@ typedef enum {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Sedici byte, non uno di piu'.
+ * Diciassette byte, non uno di piu'.
  *
  * La misura non e' casuale: la notifica BLE piu' piccola che esista porta venti
  * byte di dati (ATT MTU 23 meno i tre di intestazione). Standoci dentro, lo
  * stato della partita arriva anche senza negoziare l'MTU, che con Web Bluetooth
  * non e' garantito chiedere.
+ *
+ * I sedici byte originali sono rimasti dove erano; il diciassettesimo e' in
+ * coda e dice che cosa ha provocato la pubblicazione (vedi ::padel_event_t).
+ * Aggiungere in coda invece di infilarsi in mezzo e' quello che permette a un
+ * lettore di una versione precedente di continuare a leggere i campi che
+ * conosce, ed e' la ragione per cui la versione del protocollo non cambia.
  */
-#define PADEL_SCORE_PACKET_SIZE  16
+#define PADEL_SCORE_PACKET_SIZE  17
 #define PADEL_STATUS_PACKET_SIZE 6
 #define PADEL_DEVICE_INFO_SIZE   8
 #define PADEL_CONTROL_PACKET_SIZE (1 + PADEL_TOKEN_LEN)
@@ -156,9 +228,13 @@ typedef enum {
 /**
  * @brief Snapshot completo e autorevole della partita.
  *
- * E' sempre lo stato intero, mai un evento: una pagina che si collega a partita
- * iniziata lo legge e sa subito tutto, e se una notifica va persa la successiva
- * rimette comunque le cose a posto.
+ * E' sempre lo stato intero: una pagina che si collega a partita iniziata lo
+ * legge e sa subito tutto, e se una notifica va persa la successiva rimette
+ * comunque le cose a posto.
+ *
+ * Insieme allo stato viaggia il motivo per cui e' partito (::padel_event_t):
+ * il campo ``event`` racconta il gesto, tutto il resto racconta la partita
+ * dopo quel gesto. Chi riceve non applica niente: disegna quello che legge.
  *
  * Gli indici delle squadre sono quelli del motore: 0 = LORO (sinistra),
  * 1 = NOI (destra).
@@ -171,6 +247,7 @@ typedef struct {
     uint8_t  games[2];    /**< game vinti nel set corrente                     */
     uint8_t  sets[2];     /**< set vinti                                       */
     uint16_t tb_points[2];/**< punti del tie-break, contati uno per uno        */
+    uint8_t  event;       /**< padel_event_t: che cosa ha provocato l'invio     */
 } padel_score_packet_t;
 
 /** Stato dell'associazione e della connessione in corso. */

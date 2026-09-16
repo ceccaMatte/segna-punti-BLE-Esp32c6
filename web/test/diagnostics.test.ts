@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PacketDiagnostics } from '../src/ble/diagnostics';
+import { PadelEvent } from '../src/ble/protocol';
 
 let diagnostics: PacketDiagnostics;
 
@@ -175,5 +176,40 @@ describe('tempi ed errori', () => {
     expect(diagnostics.lastError).toBeNull();
     /* Le disconnessioni restano: raccontano la sessione, non il collegamento. */
     expect(diagnostics.disconnects).toBe(1);
+  });
+});
+
+describe('eventi e byte grezzi', () => {
+  it('ricorda l\'ultimo gesto e quando e\' arrivato', () => {
+    diagnostics.notePacket(1, 1000);
+    diagnostics.noteEvent(PadelEvent.Moment, 1000);
+
+    expect(diagnostics.lastEvent).toBe(PadelEvent.Moment);
+    expect(diagnostics.lastEventAt).toBe(1000);
+
+    diagnostics.noteEvent(PadelEvent.OurPoint, 2500);
+
+    expect(diagnostics.lastEvent).toBe(PadelEvent.OurPoint);
+    expect(diagnostics.lastEventAt).toBe(2500);
+  });
+
+  it('tiene i byte dell\'ultimo pacchetto arrivato dalla radio', () => {
+    diagnostics.notePacket(1, 1000, '0102030405');
+    expect(diagnostics.lastPacketHex).toBe('0102030405');
+
+    /* Una lettura non passa dalla radio come notifica: non porta byte nuovi e
+       non cancella quelli di prima. */
+    diagnostics.notePacket(2, 2000);
+    expect(diagnostics.lastPacketHex).toBe('0102030405');
+  });
+
+  it('azzerando si dimenticano anche evento e byte', () => {
+    diagnostics.notePacket(1, 1000, 'aabb');
+    diagnostics.noteEvent(PadelEvent.Reset, 1000);
+    diagnostics.reset();
+
+    expect(diagnostics.lastEvent).toBeNull();
+    expect(diagnostics.lastEventAt).toBeNull();
+    expect(diagnostics.lastPacketHex).toBeNull();
   });
 });

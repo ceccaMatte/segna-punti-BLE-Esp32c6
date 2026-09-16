@@ -2,15 +2,15 @@
  * @file screens.h
  * @brief Cosa c'e' scritto sullo schermo, in questo momento.
  *
- * Le schermate sono due e non convivono mai: il punteggio della partita e la
- * schermata di commissioning. Chi decide quale delle due si vede e' questo
- * modulo, e lo decide guardando lo stato dell'associazione: la pagina web non
- * chiede di essere mostrata, si limita a esistere.
+ * Le schermate sono tre e non convivono mai: il punteggio della partita, la
+ * schermata di commissioning e l'avviso che invita a tenere premuto. Chi
+ * decide quale si vede e' questo modulo: guarda lo stato dell'associazione
+ * (la pagina web non chiede di essere mostrata, si limita a esistere) e la
+ * pressione in corso, che arriva da `gestures.c`.
  *
- * Il ritorno dalla schermata di commissioning e' l'unico passaggio che ha
- * bisogno di attenzione: quella copre tutto lo schermo, quindi quando sparisce
- * non basta ridisegnare le zone cambiate — va rifatto tutto, intestazione
- * compresa.
+ * I ritorni dalle due schermate che coprono tutto sono l'unico passaggio che
+ * ha bisogno di attenzione: quando spariscono non basta ridisegnare le zone
+ * cambiate — va rifatto tutto, intestazione compresa.
  *
  * SPDX-License-Identifier: MIT
  */

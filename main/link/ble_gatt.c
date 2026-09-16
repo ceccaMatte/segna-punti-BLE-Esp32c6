@@ -581,12 +581,12 @@ static bool notify(uint16_t handle, bool subscribed, const uint8_t *data, size_t
     return true;
 }
 
-bool ble_gatt_notify_score(void)
+bool ble_gatt_notify_score(const uint8_t *packet, size_t size)
 {
-    if (s_score_size == 0u) {
+    if (packet == NULL || size == 0u) {
         return false;
     }
-    return notify(s_handle_score, s_score_subscribed, s_score, s_score_size);
+    return notify(s_handle_score, s_score_subscribed, packet, size);
 }
 
 bool ble_gatt_notify_status(void)

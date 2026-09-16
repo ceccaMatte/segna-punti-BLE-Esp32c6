@@ -74,8 +74,17 @@ void ble_gatt_set_score(const uint8_t *packet, size_t size);
  */
 void ble_gatt_set_score_readable(bool readable);
 
-/** Manda lo stato della partita come notifica. Falso se non c'e' nessuno in ascolto. */
-bool ble_gatt_notify_score(void);
+/**
+ * Manda uno stato della partita come notifica.
+ *
+ * I byte da spedire sono quelli che si vogliono spedire *adesso*, e possono
+ * non essere la copia che si risponde a chi legge: la notifica racconta il
+ * gesto appena successo, la lettura racconta com'e' la partita, e le due cose
+ * divergono proprio quando qualcuno legge subito dopo un gesto.
+ *
+ * Falso se non c'e' nessuno in ascolto.
+ */
+bool ble_gatt_notify_score(const uint8_t *packet, size_t size);
 
 /** Manda lo stato dell'associazione come notifica. */
 bool ble_gatt_notify_status(void);

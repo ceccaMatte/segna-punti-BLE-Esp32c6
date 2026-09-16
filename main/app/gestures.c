@@ -11,6 +11,7 @@
 #include "esp_check.h"
 #include "esp_log.h"
 
+#include "ble_score_service.h"
 #include "board.h"
 #include "button.h"
 #include "commissioning_manager.h"
@@ -29,18 +30,37 @@ static button_t s_button;
 static const char *TAG = "segnapunti";
 
 /** Nome del gesto riconosciuto, per i log. */
-static const char *event_name(btn_event_t event)
+static const char *gesture_name(btn_event_t event)
 {
     switch (event) {
     case BTN_EVT_SINGLE:    return "1 click -> NOI";
     case BTN_EVT_DOUBLE:    return "2 click -> LORO";
     case BTN_EVT_TRIPLE:    return "3 click -> annulla";
-    case BTN_EVT_LONG:      return "pressione lunga -> azzera";
-    case BTN_EVT_VERY_LONG: return "pressione prolungata -> commissioning";
+    case BTN_EVT_QUADRUPLE: return "4 click -> azzera";
+    case BTN_EVT_MOMENT:    return "pressione lunga -> MOMENT";
+    case BTN_EVT_PAIRING:   return "pressione prolungata -> commissioning";
     default:                return "nessuno";
     }
 }
 #endif
+
+/**
+ * Il nome che il gesto prende nel protocollo.
+ *
+ * La macchina del pulsante non conosce il protocollo e il protocollo non
+ * conosce i gesti: la traduzione sta qui, in un posto solo, e non va scritta
+ * ne' di la' ne' di qua.
+ */
+static padel_event_t protocol_event(btn_event_t event)
+{
+    switch (event) {
+    case BTN_EVT_SINGLE:    return PADEL_EVT_OUR_POINT;
+    case BTN_EVT_DOUBLE:    return PADEL_EVT_THEIR_POINT;
+    case BTN_EVT_TRIPLE:    return PADEL_EVT_UNDO;
+    case BTN_EVT_QUADRUPLE: return PADEL_EVT_RESET;
+    default:                return PADEL_EVT_NONE;
+    }
+}
 
 /**
  * Prepara il piedino del pulsante come ingresso.
@@ -67,6 +87,19 @@ void gestures_init(void)
     button_init(&s_button);
 }
 
+uint32_t gestures_hold_ms(void)
+{
+    /* hold_ms sopravvive al rilascio come ultimo valore misurato: e' la
+       pressione *in corso* che conta, e a pulsante su non c'e' nessuna
+       pressione in corso. */
+    return s_button.level ? s_button.hold_ms : 0u;
+}
+
+uint32_t gestures_pairing_hold_ms(void)
+{
+    return BTN_PAIRING_HOLD_MS;
+}
+
 void gestures_update(uint32_t dt_ms)
 {
     const bool pressed = (gpio_get_level(BOARD_BUTTON_GPIO) == BUTTON_PRESSED_LEVEL);
@@ -76,24 +109,47 @@ void gestures_update(uint32_t dt_ms)
         return;
     }
 
-    /*
-     * La pressione piu' lunga non e' un gesto di gioco: non passa dal
-     * controller, apre la finestra di commissioning come farebbe il piedino
-     * tenuto verso massa. Il controller non sa nemmeno che esista.
-     */
-    if (event == BTN_EVT_VERY_LONG) {
+    switch (event) {
+    case BTN_EVT_PAIRING:
+        /*
+         * La pressione piu' lunga non e' un gesto di gioco: apre la finestra
+         * di commissioning, come farebbe il piedino tenuto verso massa.
+         *
+         * Prima si annuncia l'evento alla pagina collegata — se c'e' e si e'
+         * fatta riconoscere — e solo dopo si cancella l'associazione: in questo
+         * istante il vecchio committente e' ancora valido, ed e' l'ultima
+         * occasione per dirgli perche' sta per perdere le notifiche.
+         */
+        ble_score_service_publish_event(controller_state(), PADEL_EVT_START_PAIRING);
         commissioning_manager_request();
-    } else {
-        controller_handle_event(event);
+        break;
+
+    case BTN_EVT_MOMENT:
+        /* Un segno nel tempo, non un punto: il punteggio resta com'e', quindi
+           non passa dal controller. Lo stato che accompagna l'evento dice in
+           che punto della partita il segno e' stato chiesto. */
+        ble_score_service_publish_event(controller_state(), PADEL_EVT_MOMENT);
+        break;
+
+    default:
+        /*
+         * I gesti di gioco passano dal controller, e lo stato si pubblica solo
+         * se ha davvero applicato qualcosa: un click a partita finita non deve
+         * arrivare alla pagina web come un evento che non c'e' stato.
+         */
+        if (controller_handle_event(event)) {
+            ble_score_service_publish_event(controller_state(), protocol_event(event));
+        }
 
 #if CONFIG_PADEL_DEBUG_INVARIANTS
         if (!match_invariants_ok(controller_state())) {
-            ESP_LOGE(TAG, "stato della partita incoerente dopo: %s", event_name(event));
+            ESP_LOGE(TAG, "stato della partita incoerente dopo: %s", gesture_name(event));
         }
 #endif
+        break;
     }
 
 #if CONFIG_PADEL_LOG_EVENTS
-    ESP_LOGI(TAG, "%s", event_name(event));
+    ESP_LOGI(TAG, "%s", gesture_name(event));
 #endif
 }

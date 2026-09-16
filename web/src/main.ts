@@ -27,6 +27,7 @@ import { SilenceWatch } from './ble/liveness';
 import { AutoReconnect } from './ble/reconnect';
 import {
   CommissioningState,
+  PadelEvent,
   ResultCode,
   TOKEN_LENGTH,
   type CommissioningStatusPacket,
@@ -147,8 +148,8 @@ const client = new PadelBleClient({
   onStatus: (packet) => {
     handleStatus(packet);
   },
-  onScore: (packet) => {
-    applyScore(packet);
+  onScore: (packet, raw) => {
+    applyScore(packet, raw);
   },
   onError: (text) => {
     diagnostics.noteError(text);
@@ -221,7 +222,7 @@ function handleStatus(packet: CommissioningStatusPacket): void {
   render();
 }
 
-function applyScore(packet: ScoreStatePacket): void {
+function applyScore(packet: ScoreStatePacket, raw: string | null = null): void {
   const now = Date.now();
   silence.noteAlive(now);
 
@@ -245,7 +246,25 @@ function applyScore(packet: ScoreStatePacket): void {
     return;
   }
 
-  diagnostics.notePacket(packet.sequence, now);
+  diagnostics.notePacket(packet.sequence, now, raw);
+
+  /*
+   * Il pacchetto racconta anche *perche'* e' partito, e i gesti finiscono
+   * nella diagnostica: e' li' che si legge "Ultimo evento: MOMENT" senza
+   * doverlo dedurre dal punteggio, che per un MOMENT non cambia.
+   */
+  if (packet.event !== PadelEvent.None) {
+    diagnostics.noteEvent(packet.event, now);
+  }
+
+  /* La scheda ha aperto una finestra nuova: l'associazione salvata qui sta
+     per non valere piu', ed e' meglio dirlo subito che lasciarlo scoprire
+     alla prossima riconnessione. */
+  if (packet.event === PadelEvent.StartPairing) {
+    message =
+      "La scheda ha aperto una nuova finestra di commissioning: l'associazione va rifatta.";
+  }
+
   score = toView(packet);
   render();
 }

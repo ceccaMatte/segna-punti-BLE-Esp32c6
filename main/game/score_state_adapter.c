@@ -9,7 +9,8 @@
 
 #include <string.h>
 
-void score_adapter_build(const MatchState *match, uint16_t sequence, padel_score_packet_t *out)
+void score_adapter_build(const MatchState *match, uint16_t sequence,
+                         padel_event_t event, padel_score_packet_t *out)
 {
     if (out == NULL) {
         return;
@@ -17,6 +18,7 @@ void score_adapter_build(const MatchState *match, uint16_t sequence, padel_score
 
     memset(out, 0, sizeof(*out));
     out->sequence = sequence;
+    out->event    = (uint8_t)event;
 
     if (match == NULL) {
         /* Nessuna partita: si manda comunque uno stato valido, con tutto a

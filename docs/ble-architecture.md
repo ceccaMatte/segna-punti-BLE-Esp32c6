@@ -63,6 +63,7 @@ possono provare sul computer e quelli che parlano con l'hardware.
 | `link/commissioning_pin` | il piedino che apre la finestra, e i suoi cambiamenti a video |
 | `link/commissioning_manager` | la regia: piedino, memoria, stato, radio |
 | `ui/commissioning_ui` | la schermata di commissioning sul display |
+| `ui/hold_ui` | l'avviso che invita a tenere premuto, con la barra |
 | `link/ble_score_service` | il punto in cui il punteggio incontra la radio |
 
 Fuori da `ble_score_service` non c'e' nessuna chiamata al Bluetooth: e' l'unico
@@ -115,7 +116,7 @@ Tutti i numeri piu' lunghi di un byte viaggiano **dal byte meno significativo**
 (little-endian), come li scrive l'ESP32 e come li legge
 `DataView.getUint16(offset, true)`.
 
-### `SCORE_STATE` — 16 byte
+### `SCORE_STATE` — 17 byte
 
 | Byte | Cosa |
 |---|---|
@@ -132,6 +133,7 @@ Tutti i numeri piu' lunghi di un byte viaggiano **dal byte meno significativo**
 | 11 | set NOI |
 | 12..13 | punti tie-break LORO |
 | 14..15 | punti tie-break NOI |
+| 16 | evento: che cosa ha provocato l'invio (vedi sotto) |
 
 I punti del game sono i valori del motore: `0` = 0, `1` = 15, `2` = 30,
 `3` = 40, `4` = vantaggio. **Durante il tie-break restano a zero** e i punti
@@ -147,9 +149,37 @@ aspettare il tempo di supervisione del Bluetooth. Chi lo riceve non lo conta
 come un pacchetto: `web/src/ble/liveness.ts` e `main/ble_score_service.c`
 portano le due costanti che devono restare d'accordo.
 
-Sedici byte e non uno di piu' per una ragione pratica: la notifica BLE piu'
+Diciassette byte e non uno di piu' per una ragione pratica: la notifica BLE piu'
 piccola che esista porta venti byte di dati, quindi lo stato arriva anche senza
 negoziare la dimensione dei pacchetti — cosa che Web Bluetooth non garantisce.
+
+### Gli eventi
+
+Il byte 16 dice **perche'** il pacchetto e' partito; tutti gli altri dicono
+com'e' la partita **dopo** quell'evento. Chi riceve non applica niente: disegna
+quello che legge.
+
+| Valore | Nome | Chi lo produce |
+|---|---|---|
+| 0 | `NONE` | nessun gesto: un battito, oppure uno stato cambiato da solo (l'azzeramento automatico dopo la schermata del vincitore) |
+| 1 | `OUR_POINT` | un click |
+| 2 | `THEIR_POINT` | due click |
+| 3 | `UNDO` | tre click |
+| 4 | `MOMENT` | una pressione rilasciata oltre la soglia breve: un segno nel tempo, non tocca il punteggio |
+| 5 | `START_PAIRING` | la pressione ha raggiunto la soglia del commissioning; esce *prima* che l'associazione venga cancellata |
+| 6 | `RESET` | quattro click |
+| 7 | `STATE_SYNC` | non e' un gesto: accompagna lo stato mandato a chi si e' appena fatto riconoscere e le risposte alle letture |
+
+I valori sono gli stessi di `padel_event_t` (`main/link/ble_protocol.h`) e di
+`PadelEvent` (`web/src/ble/protocol.ts`), e i test dei due lati usano gli stessi
+esempi. Il byte sta **in coda** e nessun campo si e' spostato: la versione del
+protocollo resta `1`, e un lettore che conosce i sedici byte di prima li trova
+al loro posto.
+
+La notifica porta l'evento; la **risposta a una lettura** porta sempre
+`STATE_SYNC`. Chi legge sta chiedendo com'e' la partita, e non deve vedere un
+gesto vecchio come se fosse appena successo: sono le due copie che escono da
+`link/ble_score_service.c`.
 
 ### `COMMISSIONING_STATUS` — 6 byte
 
@@ -369,10 +399,11 @@ sembrerebbero pacchetti persi, e non lo sono.
 
 ## Perche' cosi'
 
-**Perche' si manda lo stato intero e non l'evento.** Un pacchetto "punto a NOI"
-e' piccolo e veloce da scrivere, ma se se ne perde uno la pagina resta
+**Perche' si manda lo stato intero e non solo l'evento.** Un pacchetto "punto a
+NOI" e' piccolo e veloce da scrivere, ma se se ne perde uno la pagina resta
 indietro per sempre. Uno snapshot completo e' vero anche se tutti quelli prima
-sono andati persi. Il costo e' sedici byte invece di due.
+sono andati persi; il motivo per cui e' partito viaggia insieme allo stato, ma
+non lo sostituisce. Il costo e' diciassette byte invece di due.
 
 **Perche' il nome va nella risposta allo scan e non nell'annuncio.** Un
 pacchetto di annuncio porta trentuno byte: il nome (diciassette con

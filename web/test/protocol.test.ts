@@ -14,6 +14,7 @@ import {
   FLAG_HEARTBEAT,
   FLAG_SERVING_NOI,
   FLAG_TIE_BREAK,
+  PadelEvent,
   PROTOCOL_VERSION,
   ProtocolError,
   ResultCode,
@@ -22,6 +23,7 @@ import {
   decodeDeviceInfo,
   decodeScoreState,
   encodeControl,
+  eventName,
   pointLabel,
   scoreLabel,
 } from '../src/ble/protocol';
@@ -50,10 +52,12 @@ describe('stato della partita', () => {
         0, // tie-break LORO
         7,
         0, // tie-break NOI
+        PadelEvent.OurPoint, // in coda: perche' e' partito
       ]),
     );
 
     expect(packet.sequence).toBe(0x1234);
+    expect(packet.event).toBe(PadelEvent.OurPoint);
     expect(packet.heartbeat).toBe(false);
     expect(packet.tieBreak).toBe(true);
     expect(packet.servingNoi).toBe(true);
@@ -84,17 +88,38 @@ describe('stato della partita', () => {
         0,
         0,
         0, // tie-break
+        PadelEvent.None, // un battito non annuncia nessun gesto
       ]),
     );
 
     expect(packet.heartbeat).toBe(true);
+    expect(packet.event).toBe(PadelEvent.None);
     expect(packet.sequence).toBe(7);
     expect(packet.servingNoi).toBe(true);
     expect(packet.points).toEqual([0, 1]);
   });
 
-  it('riconosce la partita finita con il suo vincitore', () => {    const packet = decodeScoreState(
-      bytes([PROTOCOL_VERSION, 1, FLAG_FINISHED, 1, 9, 0, 0, 0, 0, 0, 3, 2, 0, 0, 0, 0]),
+  it('riconosce la partita finita con il suo vincitore', () => {
+    const packet = decodeScoreState(
+      bytes([
+        PROTOCOL_VERSION,
+        1,
+        FLAG_FINISHED,
+        1,
+        9,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        PadelEvent.StateSync,
+      ]),
     );
 
     expect(packet.finished).toBe(true);
@@ -102,8 +127,34 @@ describe('stato della partita', () => {
     expect(packet.sets).toEqual([3, 2]);
   });
 
+  it('senza il byte dell\'evento il pacchetto si rifiuta', () => {
+    /* Sedici byte sono il pacchetto di prima: adesso sono tagliati, e
+       l'evento non si puo' inventare. */
+    const old = [PROTOCOL_VERSION, 1, 0, WINNER_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    expect(() => decodeScoreState(bytes(old))).toThrow(ProtocolError);
+  });
+
   it('rifiuta versione, tipo e lunghezza sbagliati', () => {
-    const good = [PROTOCOL_VERSION, 1, 0, WINNER_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const good = [
+      PROTOCOL_VERSION,
+      1,
+      0,
+      WINNER_NONE,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      PadelEvent.None,
+    ];
 
     expect(() => decodeScoreState(bytes([PROTOCOL_VERSION + 1, ...good.slice(1)]))).toThrow(
       ProtocolError,
@@ -112,6 +163,26 @@ describe('stato della partita', () => {
       ProtocolError,
     );
     expect(() => decodeScoreState(bytes(good.slice(0, 10)))).toThrow(ProtocolError);
+  });
+});
+
+describe('gli eventi', () => {
+  it('hanno i numeri e i nomi del firmware', () => {
+    /* Gli stessi valori di main/link/ble_protocol.h: se uno dei due lati
+       cambia, si vede qui invece che a scheda accesa. */
+    expect(PadelEvent.None).toBe(0);
+    expect(PadelEvent.OurPoint).toBe(1);
+    expect(PadelEvent.TheirPoint).toBe(2);
+    expect(PadelEvent.Undo).toBe(3);
+    expect(PadelEvent.Moment).toBe(4);
+    expect(PadelEvent.StartPairing).toBe(5);
+    expect(PadelEvent.Reset).toBe(6);
+    expect(PadelEvent.StateSync).toBe(7);
+
+    expect(eventName(PadelEvent.OurPoint)).toBe('OUR_POINT');
+    expect(eventName(PadelEvent.Moment)).toBe('MOMENT');
+    expect(eventName(PadelEvent.StartPairing)).toBe('START_PAIRING');
+    expect(eventName(PadelEvent.StateSync)).toBe('STATE_SYNC');
   });
 });
 
@@ -173,7 +244,25 @@ describe('come si scrive il punteggio', () => {
 
   it('nel tie-break usa i punti contati uno per uno', () => {
     const packet = decodeScoreState(
-      bytes([PROTOCOL_VERSION, 1, FLAG_TIE_BREAK, WINNER_NONE, 1, 0, 0, 0, 6, 6, 1, 1, 8, 0, 7, 0]),
+      bytes([
+        PROTOCOL_VERSION,
+        1,
+        FLAG_TIE_BREAK,
+        WINNER_NONE,
+        1,
+        0,
+        0,
+        0,
+        6,
+        6,
+        1,
+        1,
+        8,
+        0,
+        7,
+        0,
+        PadelEvent.None,
+      ]),
     );
 
     /* I punti del game sono a zero, e non devono comparire. */
@@ -183,7 +272,25 @@ describe('come si scrive il punteggio', () => {
 
   it('fuori dal tie-break usa i punti del game', () => {
     const packet = decodeScoreState(
-      bytes([PROTOCOL_VERSION, 1, 0, WINNER_NONE, 1, 0, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0]),
+      bytes([
+        PROTOCOL_VERSION,
+        1,
+        0,
+        WINNER_NONE,
+        1,
+        0,
+        3,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        PadelEvent.None,
+      ]),
     );
 
     expect(scoreLabel(packet, 0)).toBe('40');

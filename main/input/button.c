@@ -18,8 +18,10 @@ static uint8_t clicks_increment(uint8_t clicks)
 /**
  * Interpreta la sequenza di click a finestra scaduta.
  *
- * Quattro o piu' click non producono nulla: il contatore non viene saturato a
- * tre apposta, cosi' una raffica accidentale non esegue un UNDO.
+ * Il quarto click azzera la partita: e' un gesto distruttivo, e per questo ne
+ * serve una raffica intera. Dal quinto in poi non succede niente: il contatore
+ * non viene saturato a quattro apposta, cosi' una raffica accidentale non
+ * esegue l'azzeramento.
  */
 static btn_event_t clicks_dispatch(uint8_t clicks)
 {
@@ -30,6 +32,8 @@ static btn_event_t clicks_dispatch(uint8_t clicks)
         return BTN_EVT_DOUBLE;
     case 3:
         return BTN_EVT_TRIPLE;
+    case 4:
+        return BTN_EVT_QUADRUPLE;
     default:
         return BTN_EVT_NONE;
     }
@@ -76,16 +80,40 @@ btn_event_t button_update(button_t *b, bool raw_pressed, uint32_t dt_ms)
     case BTN_STATE_PRESS:
         b->hold_ms += dt_ms;
 
-        /* la pressione lunga ha priorita' sulla sequenza di click in corso:
-           il conteggio viene azzerato e non verra' mai interpretato */
-        if (b->hold_ms >= BTN_LONG_PRESS_MS) {
+        /*
+         * La soglia del commissioning ha la precedenza su tutto e scatta
+         * mentre si tiene premuto: appena raggiunta esce PAIRING, la sequenza
+         * di click in sospeso viene scartata e lo stato passa a RELEASE_WAIT.
+         *
+         * Il conteggio si ferma sulla soglia invece di crescere senza limite:
+         * cosi' la condizione che fa uscire l'evento diventa falsa subito dopo
+         * averlo emesso, e l'evento esce una volta sola anche se il pulsante
+         * resta premuto per minuti. E' lo stesso problema che il riconoscitore
+         * del piedino di commissioning risolve con una bandierina.
+         */
+        if (b->hold_ms >= BTN_PAIRING_HOLD_MS) {
             b->clicks = 0;
+            b->hold_ms = BTN_PAIRING_HOLD_MS;
             b->state = BTN_STATE_RELEASE_WAIT;
-            return BTN_EVT_LONG;
+            return BTN_EVT_PAIRING;
         }
 
         if (!b->level) {
-            /* rilasciato: apri la finestra, il click non e' ancora definitivo */
+            /*
+             * La pressione e' finita. Se e' durata oltre la soglia breve non
+             * e' un click ma un MOMENT, e si decide qui, al rilascio: finche'
+             * il dito era giu' poteva ancora arrivare la soglia del pairing.
+             * La sequenza di click in sospeso viene scartata, come faceva la
+             * vecchia pressione lunga: il gesto e' uno solo, il piu' lungo.
+             */
+            if (b->hold_ms >= BTN_MOMENT_MIN_MS) {
+                b->clicks = 0;
+                b->state = BTN_STATE_IDLE;
+                return BTN_EVT_MOMENT;
+            }
+
+            /* rilasciato prima della soglia: apri la finestra, il click non e'
+               ancora definitivo */
             b->window_ms = 0;
             b->state = BTN_STATE_CLICK_WAIT;
         }
@@ -109,29 +137,15 @@ btn_event_t button_update(button_t *b, bool raw_pressed, uint32_t dt_ms)
         break;
 
     case BTN_STATE_RELEASE_WAIT:
-        /* Rilasciato: la pressione e' finita e la macchina torna a riposo. */
+        /*
+         * Qui si arriva solo dopo che il gesto di commissioning e' gia' uscito.
+         * Il dito puo' restare giu' quanto vuole: non esce piu' niente, e in
+         * particolare il rilascio non produce il MOMENT. Si aspetta soltanto
+         * che il pulsante torni su, per non contare come click il rilascio
+         * dello stesso gesto.
+         */
         if (!b->level) {
             b->state = BTN_STATE_IDLE;
-            break;
-        }
-
-        /*
-         * Il dito e' ancora giu'. Il tempo continua a correre fino alla seconda
-         * soglia, quella del commissioning.
-         *
-         * Il conteggio si ferma sulla soglia invece di crescere senza limite:
-         * cosi' la condizione che fa uscire l'evento diventa falsa subito dopo
-         * averlo emesso, e l'evento esce una volta sola anche se il pulsante
-         * resta premuto per minuti. E' lo stesso problema che il riconoscitore
-         * del piedino di commissioning risolve con una bandierina.
-         */
-        if (b->hold_ms < BTN_VERY_LONG_PRESS_MS) {
-            b->hold_ms += dt_ms;
-
-            if (b->hold_ms >= BTN_VERY_LONG_PRESS_MS) {
-                b->hold_ms = BTN_VERY_LONG_PRESS_MS;
-                return BTN_EVT_VERY_LONG;
-            }
         }
         break;
 

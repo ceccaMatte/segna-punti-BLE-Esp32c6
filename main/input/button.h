@@ -7,44 +7,60 @@
  * si testa su PC simulando pressioni e rilasci.
  *
  * ---------------------------------------------------------------------------
+ * I gesti
+ * ---------------------------------------------------------------------------
+ *   un click            punto a NOI
+ *   due click           punto a LORO
+ *   tre click           annulla l'ultima azione
+ *   quattro click       azzera la partita
+ *   cinque click o piu' nessuna azione
+ *   pressione fra BTN_MOMENT_MIN_MS e BTN_PAIRING_HOLD_MS, rilasciata:
+ *                       MOMENT (un segno nel tempo, non tocca il punteggio)
+ *   pressione oltre BTN_PAIRING_HOLD_MS:
+ *                       PAIRING (apre il commissioning)
+ *
+ * ---------------------------------------------------------------------------
  * Perche' serve una macchina a stati
  * ---------------------------------------------------------------------------
- * Con un solo pulsante bisogna distinguere quattro gesture. Il problema e' che
- * al momento del rilascio non si puo' sapere se e' finita li' o se stanno
+ * Al momento del rilascio non si puo' sapere se e' finita li' o se stanno
  * arrivando altri click: il click singolo va quindi *atteso*, non eseguito.
  *
  *   - il rilascio apre una finestra (BTN_MULTI_CLICK_MS). Se entro la finestra
  *     arriva un'altra pressione, il conteggio sale e la finestra riparte.
  *   - solo allo scadere della finestra la sequenza viene interpretata.
- *   - la pressione lunga ha priorita': appena raggiunge BTN_LONG_PRESS_MS
- *     emette LONG, azzera il conteggio dei click (la sequenza pendente viene
- *     scartata) e passa a BTN_RELEASE_WAIT.
- *   - la pressione non finisce li'. Se il dito resta giu' fino a
- *     BTN_VERY_LONG_PRESS_MS, da BTN_RELEASE_WAIT esce un secondo evento,
- *     VERY_LONG: e' il gesto che apre il commissioning senza doverci attaccare
- *     un filo o un pulsante esterno. Il conteggio si ferma sulla soglia,
- *     quindi l'evento esce una volta sola anche se il pulsante resta premuto
- *     per minuti.
- *   - quattro o piu' click non producono nulla: la sequenza viene scartata.
- *     Il contatore NON viene saturato a 3, altrimenti quattro pressioni
- *     accidentali eseguirebbero un UNDO.
+ *   - MOMENT non si decide quando si supera la soglia, ma al rilascio: e' chi
+ *     molla il pulsante a dire che il gesto e' finito, e finche' il dito e'
+ *     giu' puo' sempre arrivare la soglia del commissioning. Una pressione
+ *     che finisce oltre la soglia breve scarta la sequenza di click in sospeso:
+ *     il gesto e' uno solo, il piu' lungo.
+ *   - la soglia del commissioning, invece, scatta mentre si tiene premuto,
+ *     perche' quello che apre — la finestra di associazione — deve cominciare
+ *     subito: chi tiene premuto sta aspettando un effetto, non un rilascio.
+ *     Il conteggio del tempo si ferma sulla soglia, cosi' l'evento esce una
+ *     volta sola anche se il pulsante resta premuto per minuti, e da li' in
+ *     avanti non esce piu' niente: il rilascio non produce anche il MOMENT.
+ *   - quattro click azzerano la partita; cinque o piu' non producono nulla.
+ *     Il contatore NON viene saturato a quattro, altrimenti una raffica
+ *     accidentale eseguirebbe l'azzeramento.
  *
  * ---------------------------------------------------------------------------
  * Tabella delle transizioni (level = livello gia' filtrato)
  * ---------------------------------------------------------------------------
- * | Stato         | Condizione                        | Azione            | Nuovo stato  |
- * |---------------|-----------------------------------|-------------------|--------------|
- * | IDLE          | level == premuto                  | clicks = 1        | PRESS        |
- * | PRESS         | hold >= LONG_PRESS_MS             | clicks = 0, LONG  | RELEASE_WAIT |
- * | PRESS         | level == rilasciato               | window = 0        | CLICK_WAIT   |
- * | CLICK_WAIT    | level == premuto                  | clicks++          | PRESS        |
- * | CLICK_WAIT    | window >= MULTI_CLICK_MS          | dispatch(clicks)  | IDLE         |
- * | RELEASE_WAIT  | hold >= VERY_LONG_PRESS_MS        | VERY_LONG         | RELEASE_WAIT |
- * | RELEASE_WAIT  | level == rilasciato               | nessuno           | IDLE         |
+ * | Stato         | Condizione                          | Azione                    | Nuovo stato  |
+ * |---------------|-------------------------------------|---------------------------|--------------|
+ * | IDLE          | level == premuto                    | clicks = 1, hold = 0      | PRESS        |
+ * | PRESS         | hold >= PAIRING_HOLD_MS             | clicks = 0, hold = soglia, esce PAIRING | RELEASE_WAIT |
+ * | PRESS         | level == rilasciato, hold >= MOMENT_MIN_MS | clicks = 0, esce MOMENT | IDLE   |
+ * | PRESS         | level == rilasciato, hold < MOMENT_MIN_MS  | window = 0          | CLICK_WAIT   |
+ * | CLICK_WAIT    | level == premuto                    | clicks++                  | PRESS        |
+ * | CLICK_WAIT    | window >= MULTI_CLICK_MS            | dispatch(clicks)          | IDLE         |
+ * | RELEASE_WAIT  | level == rilasciato                 | nessuno                   | IDLE         |
  *
  * Nota sul debounce: il rilascio viene riconosciuto fino a BTN_DEBOUNCE_MS dopo
- * l'istante reale, quindi la durata misurata di una pressione lunga puo'
- * risultare maggiore di circa 25 ms su 4000 (0,6%). Ininfluente in pratica.
+ * l'istante reale, quindi la durata misurata di una pressione puo' risultare
+ * maggiore di circa 25 ms. Una pressione di poco sotto la soglia del MOMENT
+ * puo' quindi contare come MOMENT: con soglie di quest'ordine l'effetto e'
+ * dell'ordine del 3%, e si vede solo in laboratorio.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -59,25 +75,31 @@
 #define BTN_DEBOUNCE_MS 25u
 #endif
 
-/** Durata oltre la quale la pressione diventa RESET. */
-#ifndef BTN_LONG_PRESS_MS
-#define BTN_LONG_PRESS_MS 4000u
+/**
+ * Durata minima di una pressione perche' il rilascio produca MOMENT.
+ *
+ * E' una soglia *al rilascio*: sotto questo tempo la pressione e' un click,
+ * sopra e' un gesto a se' che non tocca il punteggio. Si misura dal momento in
+ * cui il livello filtrato e' diventato "premuto".
+ */
+#ifndef BTN_MOMENT_MIN_MS
+#define BTN_MOMENT_MIN_MS 800u
 #endif
 
 /**
  * Durata oltre la quale la pressione apre il commissioning.
  *
- * E' la seconda soglia della stessa pressione: prima si azzera la partita,
- * poi, continuando a tenere premuto, si apre la finestra per una nuova
- * associazione. Dev'essere maggiore di BTN_LONG_PRESS_MS, altrimenti i due
+ * E' la soglia di PAIRING e scatta mentre si tiene premuto: raggiunta la
+ * soglia la scheda cancella l'associazione e apre la finestra per associarne
+ * una nuova. Dev'essere maggiore della soglia del MOMENT, altrimenti i due
  * gesti non si distinguerebbero.
  */
-#ifndef BTN_VERY_LONG_PRESS_MS
-#define BTN_VERY_LONG_PRESS_MS 6000u
+#ifndef BTN_PAIRING_HOLD_MS
+#define BTN_PAIRING_HOLD_MS 5000u
 #endif
 
-#if BTN_VERY_LONG_PRESS_MS <= BTN_LONG_PRESS_MS
-#error "BTN_VERY_LONG_PRESS_MS deve essere maggiore di BTN_LONG_PRESS_MS"
+#if BTN_PAIRING_HOLD_MS <= BTN_MOMENT_MIN_MS
+#error "BTN_PAIRING_HOLD_MS deve essere maggiore di BTN_MOMENT_MIN_MS"
 #endif
 
 /** Finestra entro cui click successivi vengono accorpati nella stessa sequenza. */
@@ -88,11 +110,12 @@
 /** Evento prodotto dalla macchina a stati. */
 typedef enum {
     BTN_EVT_NONE = 0,
-    BTN_EVT_SINGLE,    /**< 1 click              -> punto a NOI     */
-    BTN_EVT_DOUBLE,    /**< 2 click              -> punto a LORO    */
-    BTN_EVT_TRIPLE,    /**< 3 click              -> UNDO            */
-    BTN_EVT_LONG,      /**< BTN_LONG_PRESS_MS      -> RESET         */
-    BTN_EVT_VERY_LONG  /**< BTN_VERY_LONG_PRESS_MS -> commissioning */
+    BTN_EVT_SINGLE,    /**< 1 click                     -> punto a NOI */
+    BTN_EVT_DOUBLE,    /**< 2 click                     -> punto a LORO */
+    BTN_EVT_TRIPLE,    /**< 3 click                     -> UNDO        */
+    BTN_EVT_QUADRUPLE, /**< 4 click                     -> RESET       */
+    BTN_EVT_MOMENT,    /**< rilasciato oltre MOMENT_MIN -> MOMENT      */
+    BTN_EVT_PAIRING    /**< tenuto oltre PAIRING_HOLD   -> commissioning */
 } btn_event_t;
 
 /** Stato interno della macchina. */
@@ -110,6 +133,7 @@ typedef struct {
     bool        raw_last;      /**< ultimo campione grezzo                   */
     uint32_t    raw_stable_ms; /**< da quanto il grezzo e' stabile           */
     uint32_t    hold_ms;       /**< durata della pressione in corso          */
+                               /*   (si ferma alla soglia del pairing)        */
     uint32_t    window_ms;     /**< tempo trascorso nella finestra multi-click */
     uint8_t     clicks;        /**< click contati nella sequenza corrente    */
 } button_t;

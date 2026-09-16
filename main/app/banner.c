@@ -64,12 +64,14 @@ void banner_print(void)
              BOARD_RGB_GPIO, CONFIG_PADEL_LED_BRIGHTNESS / 10);
     ESP_LOGI(TAG, "  pulsante   GPIO%d, attivo basso", BOARD_BUTTON_GPIO);
     ESP_LOGI(TAG, "  gesti      1 click NOI | 2 click LORO | 3 click annulla");
-    ESP_LOGI(TAG, "             4 click niente | %" PRIu32 " ms azzera",
-             (uint32_t)BTN_LONG_PRESS_MS);
+    ESP_LOGI(TAG, "             4 click azzera | %" PRIu32 " ms MOMENT",
+             (uint32_t)BTN_MOMENT_MIN_MS);
     ESP_LOGI(TAG, "             %" PRIu32 " ms apre il commissioning",
-             (uint32_t)BTN_VERY_LONG_PRESS_MS);
+             (uint32_t)BTN_PAIRING_HOLD_MS);
     ESP_LOGI(TAG, "  finestra   %" PRIu32 " ms per i click multipli",
              (uint32_t)BTN_MULTI_CLICK_MS);
+    ESP_LOGI(TAG, "  avviso     da %d ms lo schermo invita a tenere premuto",
+             CONFIG_PADEL_HOLD_HINT_MS);
     ESP_LOGI(TAG, "  partita    al meglio di %d set, serve per primo %s",
              2 * MATCH_SETS_TO_WIN - 1,
              (FIRST_SERVER == TEAM_US) ? "NOI" : "LORO");

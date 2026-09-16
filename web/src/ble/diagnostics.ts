@@ -11,12 +11,27 @@
  * sono.
  */
 
+import type { PadelEvent } from './protocol';
+
 export class PacketDiagnostics {
   /** Pacchetti accettati e mostrati. */
   packets = 0;
 
   /** Ultimo numero di sequenza visto, null se non ne e' arrivato ancora nessuno. */
   lastSequence: number | null = null;
+
+  /**
+   * L'ultimo gesto raccontato dalla scheda, e quando e' arrivato.
+   *
+   * Non e' la stessa cosa dell'ultimo pacchetto: i battiti non lo cambiano, e
+   * nemmeno le sincronizzazioni dopo una connessione. E' il dato da guardare
+   * per rispondere alla domanda che si fa premendo un pulsante: "e' arrivato?".
+   */
+  lastEvent: PadelEvent | null = null;
+  lastEventAt: number | null = null;
+
+  /** Gli ultimi byte arrivati, in esadecimale: il pacchetto come sta sulla radio. */
+  lastPacketHex: string | null = null;
 
   /** Numeri saltati: quanti aggiornamenti non sono arrivati. */
   gaps = 0;
@@ -76,6 +91,9 @@ export class PacketDiagnostics {
   reset(): void {
     this.packets = 0;
     this.lastSequence = null;
+    this.lastEvent = null;
+    this.lastEventAt = null;
+    this.lastPacketHex = null;
     this.gaps = 0;
     this.duplicates = 0;
     this.lastUpdate = null;
@@ -87,8 +105,10 @@ export class PacketDiagnostics {
    *
    * @param sequence numero di sequenza del pacchetto.
    * @param now      istante di arrivo, in millisecondi.
+   * @param raw      i byte come sono arrivati, in esadecimale. Assente per le
+   *                 letture, che non passano dalla radio come notifica.
    */
-  notePacket(sequence: number, now: number): void {
+  notePacket(sequence: number, now: number, raw: string | null = null): void {
     if (this.lastSequence === null) {
       /* Primo pacchetto dopo la connessione: si prende come punto di partenza,
          senza contare niente. */
@@ -112,6 +132,21 @@ export class PacketDiagnostics {
 
     this.packets += 1;
     this.lastUpdate = now;
+
+    if (raw !== null) {
+      this.lastPacketHex = raw;
+    }
+  }
+
+  /**
+   * Registra il motivo per cui la scheda ha mandato il pacchetto.
+   *
+   * @param event il gesto, o l'evento di servizio.
+   * @param now   istante di arrivo, in millisecondi.
+   */
+  noteEvent(event: PadelEvent, now: number): void {
+    this.lastEvent = event;
+    this.lastEventAt = now;
   }
 
   /**

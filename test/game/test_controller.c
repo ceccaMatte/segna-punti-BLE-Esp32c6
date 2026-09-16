@@ -61,7 +61,7 @@ static void test_instradamento_in_playing(void)
     controller_handle_event(BTN_EVT_DOUBLE);
     CHECK_EQ(controller_state()->points[TEAM_THEM], PT_15);
 
-    controller_handle_event(BTN_EVT_LONG);
+    controller_handle_event(BTN_EVT_QUADRUPLE);
     CHECK_EQ(controller_state()->points[TEAM_US], PT_0);
     CHECK_EQ(controller_state()->points[TEAM_THEM], PT_0);
 
@@ -147,13 +147,13 @@ static void test_undo_in_finished(void)
 
 static void test_reset_in_finished(void)
 {
-    test_begin("in FINISHED: pressione lunga -> reset immediato");
+    test_begin("in FINISHED: quattro click -> reset immediato");
 
     controller_init(TEAM_US);
     finish_match();
     CHECK_EQ(controller_phase(), MATCH_PHASE_FINISHED);
 
-    controller_handle_event(BTN_EVT_LONG);
+    controller_handle_event(BTN_EVT_QUADRUPLE);
 
     CHECK_EQ(controller_phase(), MATCH_PHASE_PLAYING);
     CHECK_EQ(controller_state()->sets[TEAM_US], 0);
@@ -161,7 +161,7 @@ static void test_reset_in_finished(void)
     CHECK(!controller_state()->finished);
     CHECK_EQ(controller_finished_elapsed_ms(), 0);
 
-    test_end("in FINISHED: pressione lunga -> reset immediato");
+    test_end("in FINISHED: quattro click -> reset immediato");
 }
 
 static void test_timeout_reset(void)
@@ -216,7 +216,7 @@ static void test_azione_riportata(void)
     controller_handle_event(BTN_EVT_TRIPLE);
     CHECK_EQ(controller_take_action(), CTRL_ACTION_UNDO);
 
-    controller_handle_event(BTN_EVT_LONG);
+    controller_handle_event(BTN_EVT_QUADRUPLE);
     CHECK_EQ(controller_take_action(), CTRL_ACTION_RESET);
 
     /* Un annullamento senza niente da annullare non e' un'azione: chi sta
@@ -248,6 +248,37 @@ static void test_azione_in_finished(void)
     controller_handle_event(BTN_EVT_TRIPLE);
     CHECK_EQ(controller_take_action(), CTRL_ACTION_UNDO);
     CHECK(!controller_state()->finished);
+
+    test_end(name);
+}
+
+static void test_esito_riportato(void)
+{
+    const char *name = "l'esito dice se l'evento ha prodotto qualcosa";
+    test_begin(name);
+
+    controller_init(TEAM_US);
+
+    /* Un gesto che agisce sullo stato riporta true: chi pubblica lo stato lo
+       manda alla pagina, con il nome del gesto. */
+    CHECK(controller_handle_event(BTN_EVT_SINGLE));
+    CHECK(controller_handle_event(BTN_EVT_DOUBLE));
+    CHECK(controller_handle_event(BTN_EVT_QUADRUPLE));
+
+    /* Un annullamento senza niente da annullare non e' un gesto: la pagina
+       non deve vedere un UNDO che non e' successo. */
+    CHECK(!controller_handle_event(BTN_EVT_TRIPLE));
+
+    finish_match();
+
+    /* I click singoli e doppi, a partita finita, non sono azioni... */
+    CHECK(!controller_handle_event(BTN_EVT_SINGLE));
+    CHECK(!controller_handle_event(BTN_EVT_DOUBLE));
+
+    /* ...ma l'annullamento della palla che ha chiuso il match e
+       l'azzeramento si'. */
+    CHECK(controller_handle_event(BTN_EVT_TRIPLE));
+    CHECK(controller_handle_event(BTN_EVT_QUADRUPLE));
 
     test_end(name);
 }
@@ -293,6 +324,7 @@ void test_controller_all(void)
     test_timeout_reset();
     test_azione_riportata();
     test_azione_in_finished();
+    test_esito_riportato();
     test_reset_automatico_e_un_azione();
 
     printf("\n");

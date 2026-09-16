@@ -1,6 +1,6 @@
 /**
  * @file screens.c
- * @brief Le due schermate. Vedi screens.h per il perche'.
+ * @brief Le tre schermate. Vedi screens.h per il perche'.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -17,6 +17,8 @@
 #include "commissioning_ui.h"
 #include "controller.h"
 #include "display.h"
+#include "gestures.h"
+#include "hold_ui.h"
 #include "ui.h"
 #include "ui_view.h"
 
@@ -24,8 +26,12 @@ static const char *TAG = "segnapunti";
 
 /** Per quanto resta a video la figura di prova, quando e' attiva. */
 #define TEST_PATTERN_SECONDS 5
+
 /** Vero finche' a video c'e' la schermata di commissioning. */
 static bool s_commissioning_screen;
+
+/** Vero finche' a video c'e' l'avviso della pressione lunga. */
+static bool s_hold_screen;
 
 /** La vista della partita: si riempie e si disegna a ogni giro. */
 static ui_view_t s_view;
@@ -72,7 +78,9 @@ void screens_init(void)
 
     ui_init();
     commissioning_ui_init();
+    hold_ui_init();
     s_commissioning_screen = false;
+    s_hold_screen = false;
 }
 
 void screens_update(uint32_t now_ms)
@@ -83,6 +91,7 @@ void screens_update(uint32_t now_ms)
                                 commissioning_manager_short_id(),
                                 now_ms);
         s_commissioning_screen = true;
+        s_hold_screen = false;
         return;
     }
 
@@ -90,6 +99,26 @@ void screens_update(uint32_t now_ms)
         /* Si torna al punteggio: la schermata di commissioning copriva tutto,
            quindi va rifatta da capo, intestazione compresa. */
         s_commissioning_screen = false;
+        ui_invalidate();
+    }
+
+    /*
+     * La pressione lunga e' un gesto che non si vede: finche' non si molla il
+     * pulsante non succede niente, e chi lo tiene premuto non saprebbe nemmeno
+     * se la scheda se ne e' accorta. Da questa soglia lo schermo lo dice, e la
+     * barra mostra quanto manca al commissioning.
+     */
+    const uint32_t hold_ms = gestures_hold_ms();
+    if (hold_ms >= CONFIG_PADEL_HOLD_HINT_MS) {
+        hold_ui_update(hold_ms, gestures_pairing_hold_ms(), now_ms);
+        s_hold_screen = true;
+        return;
+    }
+
+    if (s_hold_screen) {
+        /* Anche l'avviso copriva tutto: si rifa' tutto, intestazione
+           compresa. */
+        s_hold_screen = false;
         ui_invalidate();
     }
 

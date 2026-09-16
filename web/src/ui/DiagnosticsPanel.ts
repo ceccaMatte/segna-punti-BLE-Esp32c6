@@ -9,6 +9,7 @@
  */
 
 import type { PacketDiagnostics } from '../ble/diagnostics';
+import { eventName } from '../ble/protocol';
 import { clear, facts } from './dom';
 
 function ageText(ageMs: number | null): string {
@@ -40,6 +41,15 @@ export class DiagnosticsPanel {
     this.root.append(
       facts([
         ['Pacchetti ricevuti', String(diagnostics.packets)],
+        [
+          'Ultimo evento',
+          diagnostics.lastEvent === null ? '—' : eventName(diagnostics.lastEvent),
+        ],
+        [
+          'Da ultimo evento',
+          ageText(diagnostics.lastEventAt === null ? null : now - diagnostics.lastEventAt),
+        ],
+        ['Ultimo pacchetto', diagnostics.lastPacketHex ?? '—'],
         ['Ultimo numero', diagnostics.lastSequence === null ? '—' : String(diagnostics.lastSequence)],
         ['Salti', String(diagnostics.gaps)],
         ['Duplicati', String(diagnostics.duplicates)],

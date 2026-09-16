@@ -144,9 +144,9 @@ static void test_triplo(void)
     test_end("tre click -> TRIPLE");
 }
 
-static void test_quattro_cinque_nessuna_azione(void)
+static void test_quattro(void)
 {
-    test_begin("quattro e cinque click -> nessuna azione");
+    test_begin("quattro click -> QUADRUPLE, emesso solo a finestra scaduta");
 
     button_t  b;
     evt_log_t log;
@@ -157,9 +157,23 @@ static void test_quattro_cinque_nessuna_azione(void)
     for (int i = 0; i < 4; i++) {
         one_click(&b, &log);
     }
-    run(&b, false, WINDOW_DRAIN, &log);
 
-    CHECK_EQ(log.count, 0); /* sequenza scartata, niente UNDO accidentale */
+    /* l'azzeramento non e' immediato: la raffica potrebbe non essere finita */
+    CHECK_EQ(log.count, 0);
+
+    run(&b, false, WINDOW_DRAIN, &log);
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.last, BTN_EVT_QUADRUPLE);
+
+    test_end("quattro click -> QUADRUPLE, emesso solo a finestra scaduta");
+}
+
+static void test_cinque_o_piu_nessuna_azione(void)
+{
+    test_begin("cinque click o piu' -> nessuna azione");
+
+    button_t  b;
+    evt_log_t log;
 
     button_init(&b);
     log_reset(&log);
@@ -169,9 +183,11 @@ static void test_quattro_cinque_nessuna_azione(void)
     }
     run(&b, false, WINDOW_DRAIN, &log);
 
+    /* sequenza scartata: il contatore non si satura a quattro, altrimenti
+       una raffica accidentale azzererebbe la partita */
     CHECK_EQ(log.count, 0);
 
-    test_end("quattro e cinque click -> nessuna azione");
+    test_end("cinque click o piu' -> nessuna azione");
 }
 
 static void test_click_separati(void)
@@ -195,9 +211,9 @@ static void test_click_separati(void)
     test_end("due click distanti nel tempo -> due SINGLE distinti");
 }
 
-static void test_pressione_lunga(void)
+static void test_moment_al_rilascio(void)
 {
-    test_begin("pressione di 4 s -> LONG e nessun click");
+    test_begin("pressione oltre la soglia breve -> MOMENT, deciso al rilascio");
 
     button_t  b;
     evt_log_t log;
@@ -205,20 +221,22 @@ static void test_pressione_lunga(void)
     button_init(&b);
     log_reset(&log);
 
-    run(&b, true, BTN_LONG_PRESS_MS + 100u, &log);
-    CHECK_EQ(log.count, 1);
-    CHECK_EQ(log.last, BTN_EVT_LONG);
+    /* Finche' il dito e' giu' non esce niente: il gesto si decide al
+       rilascio, perche' fino all'ultimo puo' arrivare la soglia del
+       pairing. */
+    run(&b, true, BTN_MOMENT_MIN_MS + 100u, &log);
+    CHECK_EQ(log.count, 0);
 
-    /* al rilascio non deve uscire nulla: la pressione lunga ha gia' agito */
     run(&b, false, WINDOW_DRAIN, &log);
     CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.last, BTN_EVT_MOMENT);
 
-    test_end("pressione di 4 s -> LONG e nessun click");
+    test_end("pressione oltre la soglia breve -> MOMENT, deciso al rilascio");
 }
 
-static void test_lunga_scarta_la_sequenza(void)
+static void test_sotto_la_soglia_del_moment(void)
 {
-    test_begin("la pressione lunga scarta la sequenza di click pendente");
+    test_begin("pressione sotto la soglia breve -> resta un click");
 
     button_t  b;
     evt_log_t log;
@@ -226,98 +244,88 @@ static void test_lunga_scarta_la_sequenza(void)
     button_init(&b);
     log_reset(&log);
 
-    /* un click pendente, poi l'utente tiene premuto fino ai 4 secondi */
+    run(&b, true, BTN_MOMENT_MIN_MS - 100u, &log);
+    run(&b, false, WINDOW_DRAIN, &log);
+
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.last, BTN_EVT_SINGLE);
+
+    test_end("pressione sotto la soglia breve -> resta un click");
+}
+
+static void test_moment_quasi_al_pairing(void)
+{
+    test_begin("una pressione che si ferma appena prima del pairing e' MOMENT");
+
+    button_t  b;
+    seq_log_t log;
+
+    button_init(&b);
+    seq_reset(&log);
+
+    run_seq(&b, true, BTN_PAIRING_HOLD_MS - 100u, &log);
+    CHECK_EQ(log.count, 0); /* il pairing non e' scattato */
+
+    run_seq(&b, false, BTN_MULTI_CLICK_MS, &log);
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.events[0], BTN_EVT_MOMENT);
+
+    test_end("una pressione che si ferma appena prima del pairing e' MOMENT");
+}
+
+static void test_moment_scarta_la_sequenza(void)
+{
+    test_begin("anche il MOMENT scarta la sequenza di click pendente");
+
+    button_t  b;
+    evt_log_t log;
+
+    button_init(&b);
+    log_reset(&log);
+
+    /* un click pendente, poi una pressione che finisce oltre la soglia
+       breve: il gesto e' uno solo, il piu' lungo */
     one_click(&b, &log);
     CHECK_EQ(log.count, 0);
 
-    run(&b, true, BTN_LONG_PRESS_MS + 100u, &log);
-    CHECK_EQ(log.count, 1);
-    CHECK_EQ(log.last, BTN_EVT_LONG);
-
-    /* rilasciando non deve comparire il SINGLE che era in sospeso */
+    run(&b, true, BTN_MOMENT_MIN_MS + 100u, &log);
     run(&b, false, WINDOW_DRAIN, &log);
-    CHECK_EQ(log.count, 1);
-
-    test_end("la pressione lunga scarta la sequenza di click pendente");
-}
-
-static void test_pressione_prolungata(void)
-{
-    test_begin("pressione oltre la soglia lunga -> LONG e poi VERY_LONG");
-
-    button_t  b;
-    seq_log_t log;
-
-    button_init(&b);
-    seq_reset(&log);
-
-    /*
-     * Un dito solo, tenuto giu' oltre il commissioning. I due gesti partono
-     * dallo stesso conto: prima la partita si azzera, poi la finestra si apre.
-     * L'ordine conta, ed e' questo.
-     */
-    run_seq(&b, true, BTN_VERY_LONG_PRESS_MS + 100u, &log);
-
-    CHECK_EQ(log.count, 2);
-    CHECK_EQ(log.events[0], BTN_EVT_LONG);
-    CHECK_EQ(log.events[1], BTN_EVT_VERY_LONG);
-
-    /* al rilascio non deve uscire altro: i due gesti sono gia' finiti */
-    run_seq(&b, false, WINDOW_DRAIN, &log);
-    CHECK_EQ(log.count, 2);
-
-    test_end("pressione oltre la soglia lunga -> LONG e poi VERY_LONG");
-}
-
-static void test_fra_le_due_soglie(void)
-{
-    test_begin("pressione fra le due soglie -> solo LONG");
-
-    button_t  b;
-    seq_log_t log;
-
-    button_init(&b);
-    seq_reset(&log);
-
-    /* chi si ferma appena prima della soglia lunga non deve ritrovarsi la
-       schermata di commissioning */
-    run_seq(&b, true, BTN_VERY_LONG_PRESS_MS - 100u, &log);
 
     CHECK_EQ(log.count, 1);
-    CHECK_EQ(log.events[0], BTN_EVT_LONG);
+    CHECK_EQ(log.last, BTN_EVT_MOMENT);
 
-    test_end("pressione fra le due soglie -> solo LONG");
+    test_end("anche il MOMENT scarta la sequenza di click pendente");
 }
 
-static void test_prolungata_una_volta_sola(void)
+static void test_pairing_una_volta_sola(void)
 {
-    test_begin("pressione di mezzo minuto -> il commissioning esce una volta sola");
+    test_begin("pressione oltre la soglia del pairing -> una volta sola");
 
     button_t  b;
     seq_log_t log;
 
     button_init(&b);
     seq_reset(&log);
+
+    /* Alla soglia l'evento esce subito, senza aspettare il rilascio: chi
+       tiene premuto sta aspettando che si apra la finestra. */
+    run_seq(&b, true, BTN_PAIRING_HOLD_MS + 100u, &log);
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.events[0], BTN_EVT_PAIRING);
 
     /*
-     * Un piedino tenuto a massa per minuti non fa riaprire la finestra a ogni
-     * secondo, e allo stesso modo un pulsante tenuto premuto non deve
-     * ripetere il gesto: due eventi, e basta, per quanto si insista.
+     * E per quanto si insista non ne esce un secondo: il conteggio si ferma
+     * sulla soglia, come faceva il riconoscitore del piedino di commissioning.
      */
-    run_seq(&b, true, 5u * BTN_VERY_LONG_PRESS_MS, &log);
+    run_seq(&b, true, 5u * BTN_PAIRING_HOLD_MS, &log);
+    CHECK_EQ(log.count, 1);
 
-    CHECK_EQ(log.count, 2);
-    CHECK_EQ(log.events[1], BTN_EVT_VERY_LONG);
-
-    run_seq(&b, false, WINDOW_DRAIN, &log);
-    CHECK_EQ(log.count, 2);
-
-    test_end("pressione di mezzo minuto -> il commissioning esce una volta sola");
+    test_end("pressione oltre la soglia del pairing -> una volta sola");
 }
 
-static void test_dopo_il_commissioning(void)
+static void test_pairing_sopprime_il_moment(void)
 {
-    test_begin("dopo il commissioning si riparte con i gesti normali");
+    test_begin("dopo il pairing il rilascio non produce MOMENT");
 
     button_t  b;
     seq_log_t log;
@@ -325,7 +333,29 @@ static void test_dopo_il_commissioning(void)
     button_init(&b);
     seq_reset(&log);
 
-    run_seq(&b, true, BTN_VERY_LONG_PRESS_MS + 100u, &log);
+    run_seq(&b, true, BTN_PAIRING_HOLD_MS + 100u, &log);
+    CHECK_EQ(log.count, 1);
+
+    /* Il rilascio e' l'istante in cui, con una pressione piu' breve, sarebbe
+       uscito il MOMENT. Qui non deve uscire niente. */
+    run_seq(&b, false, WINDOW_DRAIN, &log);
+    CHECK_EQ(log.count, 1);
+    CHECK_EQ(log.events[0], BTN_EVT_PAIRING);
+
+    test_end("dopo il pairing il rilascio non produce MOMENT");
+}
+
+static void test_dopo_il_pairing(void)
+{
+    test_begin("dopo il pairing si riparte con i gesti normali");
+
+    button_t  b;
+    seq_log_t log;
+
+    button_init(&b);
+    seq_reset(&log);
+
+    run_seq(&b, true, BTN_PAIRING_HOLD_MS + 100u, &log);
     run_seq(&b, false, WINDOW_DRAIN, &log);
     seq_reset(&log);
 
@@ -336,7 +366,7 @@ static void test_dopo_il_commissioning(void)
     CHECK_EQ(log.count, 1);
     CHECK_EQ(log.events[0], BTN_EVT_SINGLE);
 
-    test_end("dopo il commissioning si riparte con i gesti normali");
+    test_end("dopo il pairing si riparte con i gesti normali");
 }
 
 static void test_rimbalzi(void)
@@ -374,14 +404,16 @@ void test_button_all(void)
     test_singolo();
     test_doppio();
     test_triplo();
-    test_quattro_cinque_nessuna_azione();
+    test_quattro();
+    test_cinque_o_piu_nessuna_azione();
     test_click_separati();
-    test_pressione_lunga();
-    test_lunga_scarta_la_sequenza();
-    test_pressione_prolungata();
-    test_fra_le_due_soglie();
-    test_prolungata_una_volta_sola();
-    test_dopo_il_commissioning();
+    test_moment_al_rilascio();
+    test_sotto_la_soglia_del_moment();
+    test_moment_quasi_al_pairing();
+    test_moment_scarta_la_sequenza();
+    test_pairing_una_volta_sola();
+    test_pairing_sopprime_il_moment();
+    test_dopo_il_pairing();
     test_rimbalzi();
 
     printf("\n");
