@@ -1,119 +1,176 @@
 #include "gesture_engine.h"
 
 #include <string.h>
+
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 static wearable_config_t s_config;
 static wearable_sequence_t s_buffer;
-static uint32_t s_deadline_ms;
+static int64_t s_deadline_ms;
 static gesture_action_cb_t s_cb;
 static void *s_cb_ctx;
+static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 
-static uint32_t now_ms(void)
+static int64_t now_ms(void)
 {
-    return (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    return esp_timer_get_time() / 1000;
 }
 
-static bool prefix_of(const wearable_mapping_t *m)
+static bool prefix_of_locked(const wearable_mapping_t *mapping)
 {
-    if (!m->enabled || s_buffer.length > m->sequence.length) {
-        return false;
-    }
-    return memcmp(s_buffer.tokens, m->sequence.tokens, s_buffer.length) == 0;
+    return s_buffer.length <= mapping->sequence.length &&
+           memcmp(s_buffer.tokens,
+                  mapping->sequence.tokens,
+                  s_buffer.length) == 0;
 }
 
-static int exact_match(void)
+static int exact_match_locked(void)
 {
     for (uint8_t i = 0; i < s_config.mapping_count; ++i) {
-        const wearable_mapping_t *m = &s_config.mappings[i];
-        if (m->enabled && m->sequence.length == s_buffer.length &&
-            memcmp(m->sequence.tokens, s_buffer.tokens, s_buffer.length) == 0) {
+        const wearable_mapping_t *mapping = &s_config.mappings[i];
+        if (mapping->sequence.length == s_buffer.length &&
+            prefix_of_locked(mapping)) {
             return i;
         }
     }
     return -1;
 }
 
-static bool has_longer_prefix(void)
+static bool has_longer_prefix_locked(void)
 {
     for (uint8_t i = 0; i < s_config.mapping_count; ++i) {
-        const wearable_mapping_t *m = &s_config.mappings[i];
-        if (prefix_of(m) && m->sequence.length > s_buffer.length) {
+        const wearable_mapping_t *mapping = &s_config.mappings[i];
+        if (mapping->sequence.length > s_buffer.length &&
+            prefix_of_locked(mapping)) {
             return true;
         }
     }
     return false;
 }
 
-static void commit_or_clear(void)
+static bool any_prefix_locked(void)
 {
-    int idx = exact_match();
-    if (idx >= 0 && s_cb != NULL) {
-        wearable_action_t action = s_config.mappings[idx].action;
-        gesture_engine_reset();
-        s_cb(action, s_cb_ctx);
-        return;
+    for (uint8_t i = 0; i < s_config.mapping_count; ++i) {
+        if (prefix_of_locked(&s_config.mappings[i])) {
+            return true;
+        }
     }
-    gesture_engine_reset();
+    return false;
 }
 
-void gesture_engine_init(const wearable_config_t *config, gesture_action_cb_t cb, void *ctx)
-{
-    s_config = *config;
-    s_cb = cb;
-    s_cb_ctx = ctx;
-    gesture_engine_reset();
-}
-
-void gesture_engine_update_config(const wearable_config_t *config)
-{
-    s_config = *config;
-    gesture_engine_reset();
-}
-
-void gesture_engine_reset(void)
+static void reset_locked(void)
 {
     memset(&s_buffer, 0, sizeof(s_buffer));
     s_deadline_ms = 0;
 }
 
+static bool commit_locked(wearable_action_t *out_action)
+{
+    const int index = exact_match_locked();
+    if (index < 0) {
+        reset_locked();
+        return false;
+    }
+
+    *out_action = s_config.mappings[index].action;
+    reset_locked();
+    return true;
+}
+
+esp_err_t gesture_engine_init(const wearable_config_t *config,
+                              gesture_action_cb_t cb,
+                              void *ctx)
+{
+    if (config == NULL || cb == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    portENTER_CRITICAL(&s_lock);
+    s_config = *config;
+    s_cb = cb;
+    s_cb_ctx = ctx;
+    reset_locked();
+    portEXIT_CRITICAL(&s_lock);
+    return ESP_OK;
+}
+
+void gesture_engine_update_config(const wearable_config_t *config)
+{
+    if (config == NULL) {
+        return;
+    }
+
+    portENTER_CRITICAL(&s_lock);
+    s_config = *config;
+    reset_locked();
+    portEXIT_CRITICAL(&s_lock);
+}
+
+void gesture_engine_reset(void)
+{
+    portENTER_CRITICAL(&s_lock);
+    reset_locked();
+    portEXIT_CRITICAL(&s_lock);
+}
+
 void gesture_engine_feed(uint8_t token)
 {
+    if (wearable_token_button(token) >= WEARABLE_BUTTON_COUNT ||
+        wearable_token_primitive(token) >= WEARABLE_PRIMITIVE_COUNT) {
+        return;
+    }
+
+    wearable_action_t action = WEARABLE_ACTION_POINT_A;
+    bool action_ready = false;
+    gesture_action_cb_t cb = NULL;
+    void *cb_ctx = NULL;
+
+    portENTER_CRITICAL(&s_lock);
+
     if (s_buffer.length >= WEARABLE_MAX_SEQUENCE) {
-        gesture_engine_reset();
+        reset_locked();
     }
 
     s_buffer.tokens[s_buffer.length++] = token;
 
-    bool any_prefix = false;
-    for (uint8_t i = 0; i < s_config.mapping_count; ++i) {
-        if (prefix_of(&s_config.mappings[i])) {
-            any_prefix = true;
-            break;
-        }
+    if (!any_prefix_locked()) {
+        reset_locked();
+    } else if (exact_match_locked() >= 0 && !has_longer_prefix_locked()) {
+        action_ready = commit_locked(&action);
+    } else {
+        s_deadline_ms = now_ms() + s_config.sequence_gap_ms;
     }
 
-    if (!any_prefix) {
-        gesture_engine_reset();
-        return;
-    }
+    cb = s_cb;
+    cb_ctx = s_cb_ctx;
+    portEXIT_CRITICAL(&s_lock);
 
-    int exact = exact_match();
-    if (exact >= 0 && !has_longer_prefix()) {
-        commit_or_clear();
-        return;
+    if (action_ready && cb != NULL) {
+        cb(action, cb_ctx);
     }
-
-    s_deadline_ms = now_ms() + s_config.sequence_gap_ms;
 }
 
 void gesture_engine_tick(void)
 {
-    if (s_buffer.length == 0u || s_deadline_ms == 0u) {
-        return;
+    wearable_action_t action = WEARABLE_ACTION_POINT_A;
+    bool action_ready = false;
+    gesture_action_cb_t cb = NULL;
+    void *cb_ctx = NULL;
+
+    portENTER_CRITICAL(&s_lock);
+
+    if (s_buffer.length != 0u &&
+        s_deadline_ms != 0 &&
+        now_ms() >= s_deadline_ms) {
+        action_ready = commit_locked(&action);
     }
-    if ((int32_t)(now_ms() - s_deadline_ms) >= 0) {
-        commit_or_clear();
+
+    cb = s_cb;
+    cb_ctx = s_cb_ctx;
+    portEXIT_CRITICAL(&s_lock);
+
+    if (action_ready && cb != NULL) {
+        cb(action, cb_ctx);
     }
 }

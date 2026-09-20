@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "app/wearable_app.c"
+        "core/config_model.c"
         "input/button_manager.c"
         "input/gesture_engine.c"
         "storage/config_store.c"

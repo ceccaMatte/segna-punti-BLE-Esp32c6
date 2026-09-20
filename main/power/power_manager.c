@@ -1,11 +1,15 @@
 #include "power_manager.h"
 
 #include <stdbool.h>
+
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+
+#define POWER_POLL_MS 500u
+#define BATTERY_SAMPLE_MS 5000u
 
 static power_event_cb_t s_cb;
 static void *s_ctx;
@@ -16,50 +20,66 @@ static uint16_t s_battery_mv;
 
 static bool input_active(int gpio, bool active_high)
 {
-    if (gpio < 0) return false;
-    int v = gpio_get_level((gpio_num_t)gpio);
-    return active_high ? (v != 0) : (v == 0);
+    if (gpio < 0) {
+        return false;
+    }
+
+    const int level = gpio_get_level((gpio_num_t)gpio);
+    return active_high ? level != 0 : level == 0;
 }
 
 static int sample_adc(adc_channel_t channel)
 {
-    if (!s_adc_ready) return -1;
+    if (!s_adc_ready) {
+        return -1;
+    }
 
-    /* Average a few samples. For STAT we only need to distinguish ~0 V from
-       ~2.5 V, so the absolute ADC calibration error is irrelevant. */
     int total = 0;
-    const int samples = 8;
-    for (int i = 0; i < samples; ++i) {
+    const int sample_count = 8;
+
+    for (int i = 0; i < sample_count; ++i) {
         int raw = 0;
-        if (adc_oneshot_read(s_adc, channel, &raw) != ESP_OK) return -1;
+        if (adc_oneshot_read(s_adc, channel, &raw) != ESP_OK) {
+            return -1;
+        }
         total += raw;
     }
-    return total / samples;
+
+    return total / sample_count;
 }
 
 static bool charger_stat_high(void)
 {
-    int raw = sample_adc((adc_channel_t)CONFIG_WEARABLE_CHARGER_STAT_ADC_CHANNEL);
+    const int raw =
+        sample_adc((adc_channel_t)CONFIG_WEARABLE_CHARGER_STAT_ADC_CHANNEL);
+
     return raw >= CONFIG_WEARABLE_CHARGER_STAT_HIGH_RAW;
 }
 
 /*
- * A real battery-voltage measurement is deliberately disabled until the PCB
- * exposes Vbat through its own divider. "battery_state" is MCP73831 STAT, not
- * battery voltage, therefore it must never be used to estimate state of charge.
+ * The current PCB has no dedicated Vbat divider, so this function normally
+ * returns 0. The compile-time hook is intentionally kept for a future board
+ * revision; until that divider and its exact ratio are known, the firmware
+ * must not pretend that MCP73831 STAT is battery voltage.
  */
 static uint16_t sample_battery_mv(void)
 {
 #if CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL >= 0
-    int raw = sample_adc((adc_channel_t)CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL);
-    if (raw < 0) return 0;
+    const int raw =
+        sample_adc((adc_channel_t)CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL);
+    if (raw < 0) {
+        return 0;
+    }
 
-    /* Placeholder linear conversion: this path is disabled on the current PCB.
-       When the Vbat divider is added, replace this with ADC calibration plus
-       the exact divider ratio before enabling the Kconfig channel. */
-    uint32_t pin_mv = (uint32_t)raw * 2500u / 4095u;
-    return (uint16_t)(pin_mv * CONFIG_WEARABLE_BATTERY_DIVIDER_NUM /
-                      CONFIG_WEARABLE_BATTERY_DIVIDER_DEN);
+    /*
+     * This path is disabled in the current hardware configuration. Do not
+     * enable it until a calibrated Vbat divider is defined for the PCB.
+     */
+    const uint32_t pin_mv = (uint32_t)raw * 2500u / 4095u;
+    return (uint16_t)(
+        pin_mv *
+        CONFIG_WEARABLE_BATTERY_DIVIDER_NUM /
+        CONFIG_WEARABLE_BATTERY_DIVIDER_DEN);
 #else
     return 0;
 #endif
@@ -78,7 +98,7 @@ static void power_task(void *arg)
 {
     (void)arg;
 
-    uint32_t battery_sample_elapsed = 0;
+    uint32_t battery_sample_elapsed = BATTERY_SAMPLE_MS;
     uint32_t low_battery_elapsed = 0;
     bool blink = false;
     bool last_charging = false;
@@ -89,30 +109,31 @@ static void power_task(void *arg)
 
         bool vbus_present = false;
 #if CONFIG_WEARABLE_VBUS_SENSE_GPIO >= 0
-        vbus_present = input_active(CONFIG_WEARABLE_VBUS_SENSE_GPIO,
+        vbus_present = input_active(
+            CONFIG_WEARABLE_VBUS_SENSE_GPIO,
 #if CONFIG_WEARABLE_VBUS_SENSE_ACTIVE_HIGH
-                                    true
+            true
 #else
-                                    false
+            false
 #endif
-                                    );
+        );
 #endif
 
         /*
-         * MCP73831:
-         *   charging          -> STAT LOW
-         *   charge complete   -> STAT HIGH
-         *   VDD absent        -> STAT High-Z
+         * MCP73831 STAT:
+         *   LOW    -> charging
+         *   HIGH   -> charge complete
+         *   High-Z -> charger not powered
          *
-         * R11 pulls battery_state to GND when STAT is High-Z. Therefore LOW
-         * alone is ambiguous: it means either "charging" or "charger absent".
+         * R11 pulls battery_state to ground while STAT is High-Z. Therefore a
+         * LOW ADC value alone cannot distinguish "charging" from "no VBUS".
+         * Charge-complete, however, is unambiguous because STAT is HIGH.
          */
         const bool full = stat_high;
-        const bool charging =
 #if CONFIG_WEARABLE_VBUS_SENSE_GPIO >= 0
-            vbus_present && !stat_high;
+        const bool charging = vbus_present && !stat_high;
 #else
-            false;
+        const bool charging = false;
 #endif
 
         if (charging) {
@@ -122,21 +143,23 @@ static void power_task(void *arg)
             set_charge_led(true);
         } else {
             set_charge_led(false);
+            blink = false;
         }
 
-        if (charging && !last_charging && s_cb) {
+        if (charging && !last_charging && s_cb != NULL) {
             s_cb(POWER_EVENT_CHARGING, s_ctx);
         }
-        if (full && !last_full && s_cb) {
+        if (full && !last_full && s_cb != NULL) {
             s_cb(POWER_EVENT_FULL, s_ctx);
         }
+
         last_charging = charging;
         last_full = full;
 
-        battery_sample_elapsed += 500;
-        low_battery_elapsed += 500;
+        battery_sample_elapsed += POWER_POLL_MS;
+        low_battery_elapsed += POWER_POLL_MS;
 
-        if (battery_sample_elapsed >= 5000) {
+        if (battery_sample_elapsed >= BATTERY_SAMPLE_MS) {
             battery_sample_elapsed = 0;
             s_battery_mv = sample_battery_mv();
         }
@@ -146,14 +169,16 @@ static void power_task(void *arg)
             !vbus_present &&
             low_battery_elapsed >= CONFIG_WEARABLE_LOW_BATTERY_BEEP_MS) {
             low_battery_elapsed = 0;
-            if (s_cb) s_cb(POWER_EVENT_LOW_BATTERY, s_ctx);
+            if (s_cb != NULL) {
+                s_cb(POWER_EVENT_LOW_BATTERY, s_ctx);
+            }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(POWER_POLL_MS));
     }
 }
 
-void power_manager_start(power_event_cb_t cb, void *ctx)
+esp_err_t power_manager_start(power_event_cb_t cb, void *ctx)
 {
     s_cb = cb;
     s_ctx = ctx;
@@ -164,44 +189,64 @@ void power_manager_start(power_event_cb_t cb, void *ctx)
         .mode = GPIO_MODE_OUTPUT,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    gpio_config(&led);
+    esp_err_t err = gpio_config(&led);
+    if (err != ESP_OK) {
+        return err;
+    }
 #endif
 
 #if CONFIG_WEARABLE_VBUS_SENSE_GPIO >= 0
-    gpio_config_t pwr = {
+    gpio_config_t vbus = {
         .pin_bit_mask = 1ULL << CONFIG_WEARABLE_VBUS_SENSE_GPIO,
         .mode = GPIO_MODE_INPUT,
         .pull_down_en = GPIO_PULLDOWN_ENABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    gpio_config(&pwr);
+    esp_err_t err = gpio_config(&vbus);
+    if (err != ESP_OK) {
+        return err;
+    }
 #endif
 
-    adc_oneshot_unit_init_cfg_t unit_cfg = {.unit_id = ADC_UNIT_1};
-    if (adc_oneshot_new_unit(&unit_cfg, &s_adc) == ESP_OK) {
-        adc_oneshot_chan_cfg_t chan_cfg = {
-            .atten = ADC_ATTEN_DB_12,
-            .bitwidth = ADC_BITWIDTH_DEFAULT,
-        };
+    adc_oneshot_unit_init_cfg_t unit_cfg = {
+        .unit_id = ADC_UNIT_1,
+    };
 
-        s_adc_ready =
-            adc_oneshot_config_channel(
-                s_adc,
-                (adc_channel_t)CONFIG_WEARABLE_CHARGER_STAT_ADC_CHANNEL,
-                &chan_cfg) == ESP_OK;
-
-#if CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL >= 0
-        if (s_adc_ready) {
-            s_adc_ready =
-                adc_oneshot_config_channel(
-                    s_adc,
-                    (adc_channel_t)CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL,
-                    &chan_cfg) == ESP_OK;
-        }
-#endif
+    esp_err_t err = adc_oneshot_new_unit(&unit_cfg, &s_adc);
+    if (err != ESP_OK) {
+        return err;
     }
 
-    xTaskCreate(power_task, "power", 3072, NULL, 3, NULL);
+    adc_oneshot_chan_cfg_t channel_cfg = {
+        .atten = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+
+    err = adc_oneshot_config_channel(
+        s_adc,
+        (adc_channel_t)CONFIG_WEARABLE_CHARGER_STAT_ADC_CHANNEL,
+        &channel_cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+#if CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL >= 0
+    err = adc_oneshot_config_channel(
+        s_adc,
+        (adc_channel_t)CONFIG_WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL,
+        &channel_cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+#endif
+
+    s_adc_ready = true;
+
+    if (xTaskCreate(power_task, "power", 3072, NULL, 3, NULL) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
 }
 
 uint16_t power_manager_battery_mv(void)

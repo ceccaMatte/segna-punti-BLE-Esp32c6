@@ -8,6 +8,7 @@ const UUID = {
 };
 
 const ACTIONS = ['Point A', 'Point B', 'Moment', 'Undo', 'Pairing'];
+const BUTTON_NAMES = ['A', 'B', 'Moment', 'Undo'];
 const PRIMITIVES = ['Click', 'Doppio click', 'Triplo click', 'Pressione lunga'];
 const RETRY_MS = [500, 500, 1000, 1000, 2000, 2000, 3000, 5000, 8000];
 
@@ -16,6 +17,7 @@ let chars = {};
 let config = null;
 let reconnectAttempt = 0;
 let reconnectTimer = null;
+let suppressReconnect = false;
 const ackCache = new Map();
 
 const $ = id => document.getElementById(id);
@@ -61,8 +63,7 @@ function controlPacket(op, tokenBytes) {
   return out;
 }
 
-async function readStatus() {
-  const dv = await chars.status.readValue();
+function decodeStatus(dv) {
   if (dv.byteLength < 10 || dv.getUint8(0) !== 2 || dv.getUint8(1) !== 3) {
     throw new Error('Status protocol mismatch');
   }
@@ -72,6 +73,25 @@ async function readStatus() {
     pairingOpen: dv.getUint8(4) !== 0,
     batteryMv: dv.getUint16(5, true),
   };
+}
+
+async function readStatus() {
+  return decodeStatus(await chars.status.readValue());
+}
+
+function onStatusNotification(ev) {
+  try {
+    const s = decodeStatus(ev.target.value);
+    if (!s.commissioned && s.pairingOpen) {
+      suppressReconnect = true;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      if (device) localStorage.removeItem(tokenKey());
+      status('Pairing aperto: riconnessione automatica sospesa');
+    }
+  } catch (e) {
+    console.error('Status notification failed', e);
+  }
 }
 
 async function authenticateOrClaim() {
@@ -96,6 +116,7 @@ async function authenticateOrClaim() {
 
   const after = await readStatus();
   if (!after.authenticated) throw new Error('Autenticazione BLE applicativa fallita.');
+  suppressReconnect = false;
 }
 
 async function connectDevice(d) {
@@ -117,6 +138,7 @@ async function connectDevice(d) {
   };
 
   await chars.status.startNotifications();
+  chars.status.addEventListener('characteristicvaluechanged', onStatusNotification);
   await chars.action.startNotifications();
   chars.action.addEventListener('characteristicvaluechanged', onAction);
 
@@ -127,6 +149,7 @@ async function connectDevice(d) {
 }
 
 async function requestConnect() {
+  suppressReconnect = false;
   const d = await navigator.bluetooth.requestDevice({
     filters: [{ services: [SERVICE] }],
   });
@@ -155,11 +178,16 @@ async function autoReconnect() {
 }
 
 function onDisconnected() {
+  if (suppressReconnect) {
+    status('Disconnesso per pairing; riconnessione automatica sospesa');
+    return;
+  }
   status('Disconnesso, riconnessione automatica…', false);
   planReconnect();
 }
 
 function planReconnect() {
+  if (suppressReconnect) return;
   clearTimeout(reconnectTimer);
   const delay = RETRY_MS[Math.min(reconnectAttempt, RETRY_MS.length - 1)];
   reconnectAttempt++;
@@ -212,8 +240,13 @@ async function onAction(ev) {
 }
 
 function parseConfig(dv) {
-  if (dv.getUint8(0) !== 2 || dv.getUint8(1) !== 4) throw new Error('Config protocol mismatch');
+  if (dv.byteLength < 9 || dv.getUint8(0) !== 2 || dv.getUint8(1) !== 4) {
+    throw new Error('Config protocol mismatch');
+  }
   const count = dv.getUint8(2);
+  if (count > 16) throw new Error('Numero gesture non valido');
+  const wanted = 9 + count * 10 + 4 * 6;
+  if (dv.byteLength < wanted) throw new Error('Config packet truncated');
   const cfg = {
     mappingCount: count,
     multiGap: u16(dv, 3),
@@ -262,7 +295,7 @@ function renderStep(t, idx, stepIdx) {
   return `
     <span class="step">
       <select data-map="${idx}" data-step="${stepIdx}" data-kind="button">
-        ${[0,1,2,3].map(x => option(x, `Tasto ${x + 1}`, x === b)).join('')}
+        ${BUTTON_NAMES.map((name, x) => option(x, name, x === b)).join('')}
       </select>
       <select data-map="${idx}" data-step="${stepIdx}" data-kind="primitive">
         ${PRIMITIVES.map((x, i) => option(i, x, i === p)).join('')}
