@@ -162,6 +162,40 @@ static esp_err_t config_post(httpd_req_t *req)
              (unsigned)command[0],
              (unsigned)len);
 
+    /*
+     * Keep one physical pairing gesture at all times. The generic config
+     * validator already enforces this, but the HTTP API returns a specific
+     * conflict so the UI can explain the reason instead of showing a generic
+     * "invalid configuration".
+     */
+    if (command[0] == 0x11u && len == 2u) {
+        wearable_config_t snapshot;
+        if (config_runtime_snapshot(&snapshot) &&
+            command[1] < snapshot.mapping_count &&
+            snapshot.mappings[command[1]].action ==
+                WEARABLE_ACTION_ENTER_PAIRING) {
+            uint8_t pairing_count = 0;
+            for (uint8_t i = 0; i < snapshot.mapping_count; ++i) {
+                if (snapshot.mappings[i].action ==
+                    WEARABLE_ACTION_ENTER_PAIRING) {
+                    pairing_count++;
+                }
+            }
+
+            if (pairing_count <= 1u) {
+                ESP_LOGW(TAG,
+                         "reject delete mapping=%u: last pairing gesture",
+                         (unsigned)command[1]);
+                httpd_resp_set_status(req, "409 Conflict");
+                httpd_resp_set_type(req, "text/plain; charset=utf-8");
+                return httpd_resp_sendstr(
+                    req,
+                    "Deve esistere almeno una gesture di Pairing. "
+                    "Crea prima una nuova gesture Pairing, poi elimina questa.");
+            }
+        }
+    }
+
     err = config_runtime_apply_command(command, len);
     if (err == ESP_ERR_INVALID_ARG) {
         httpd_resp_send_err(req,
