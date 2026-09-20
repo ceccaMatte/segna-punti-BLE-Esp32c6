@@ -141,7 +141,10 @@ static int handle_control_write(struct ble_gatt_access_ctxt *ctxt)
     uint8_t buf[1 + WEARABLE_TOKEN_LEN];
     uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
     if (len != sizeof(buf)) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
-    if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), NULL) != 0) return BLE_ATT_ERR_UNLIKELY;
+    uint16_t copied = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &copied) != 0 || copied != len) {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
 
     if (buf[0] == CONTROL_CLAIM) {
         if (s_commissioned || !pairing_open()) return BLE_ATT_ERR_WRITE_NOT_PERMITTED;
@@ -185,8 +188,11 @@ static int handle_ack_write(struct ble_gatt_access_ctxt *ctxt)
 
     uint8_t buf[WEARABLE_ACK_PACKET_SIZE];
     uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
-    if (len < WEARABLE_ACK_PACKET_SIZE) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
-    if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), NULL) != 0) return BLE_ATT_ERR_UNLIKELY;
+    if (len != WEARABLE_ACK_PACKET_SIZE) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    uint16_t copied = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &copied) != 0 || copied != len) {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
 
     wearable_ack_packet_t ack;
     if (!wearable_decode_ack(buf, sizeof(buf), &ack)) return BLE_ATT_ERR_UNLIKELY;
@@ -225,7 +231,10 @@ static int handle_config_access(struct ble_gatt_access_ctxt *ctxt)
         uint8_t cmd[32];
         uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
         if (len == 0 || len > sizeof(cmd)) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
-        if (ble_hs_mbuf_to_flat(ctxt->om, cmd, sizeof(cmd), NULL) != 0) return BLE_ATT_ERR_UNLIKELY;
+        uint16_t copied = 0;
+        if (ble_hs_mbuf_to_flat(ctxt->om, cmd, sizeof(cmd), &copied) != 0 || copied != len) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
 
         wearable_config_t next = *s_config;
         if (!wearable_apply_config_command(&next, cmd, len)) return BLE_ATT_ERR_UNLIKELY;
