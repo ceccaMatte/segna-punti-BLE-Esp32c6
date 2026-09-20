@@ -91,6 +91,8 @@ static void on_action(wearable_action_t action,
 {
     (void)ctx;
 
+    ESP_LOGI(TAG, "action requested=%u", (unsigned)action);
+
     if (action == WEARABLE_ACTION_ENTER_PAIRING) {
         if (ble_manager_enter_pairing()) {
             sound_manager_play_system(
@@ -108,9 +110,14 @@ static void on_action(wearable_action_t action,
     }
 }
 
-static void on_primitive(uint8_t token, void *ctx)
+static void on_primitive(wearable_token_t token, void *ctx)
 {
     (void)ctx;
+    ESP_LOGD(TAG,
+             "primitive token=0x%04x mask=0x%02x type=%u",
+             token,
+             wearable_token_button_mask(token),
+             (unsigned)wearable_token_primitive(token));
     gesture_engine_feed(token);
 }
 

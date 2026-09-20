@@ -8,19 +8,27 @@
     body{font-family:system-ui,sans-serif;max-width:1050px;margin:32px auto;padding:0 16px;background:#f5f5f7;color:#151515}
     .card{background:white;border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 1px 8px #0001}
     button,input,select{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid #ccc}
-    button{cursor:pointer}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+    button{cursor:pointer}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
     .mapping{border-top:1px solid #eee;padding-top:12px;margin-top:12px}
+    .step{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .chord{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 8px;border:1px solid #ddd;border-radius:10px}
+    .chord label{display:inline-flex;gap:4px;align-items:center}
+    .chord input{padding:0}
     .ok{color:#087f23}.bad{color:#b00020}
+    .hint{color:#666;font-size:.92rem}
   </style>
 </head>
 <body>
   <h1>Playmaker Wearable</h1>
+
   <div class="card">
     <div class="row">
       <button id="connect">Connetti / Pair</button>
       <button id="auto">Riconnetti</button>
       <span id="status">Non connesso</span>
     </div>
+    <div class="hint">La diagnostica resta nella console del browser; l'interfaccia mostra solo la configurazione.</div>
   </div>
 
   <div class="card">
@@ -29,6 +37,7 @@
       <label>Sequenza <input id="seqGap" type="number" min="100" max="1500"> ms</label>
       <label>Multi-click <input id="multiGap" type="number" min="120" max="1000"> ms</label>
       <label>Long press <input id="longMs" type="number" min="400" max="5000"> ms</label>
+      <label>Simultanea <input id="chordMs" type="number" min="25" max="250"> ms</label>
       <button id="saveTiming">Salva timing</button>
     </div>
   </div>

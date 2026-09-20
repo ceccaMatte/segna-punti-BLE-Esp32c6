@@ -2,10 +2,13 @@
 
 #include <string.h>
 
-static bool sequences_equal(const wearable_sequence_t *a, const wearable_sequence_t *b)
+static bool sequences_equal(const wearable_sequence_t *a,
+                            const wearable_sequence_t *b)
 {
     return a->length == b->length &&
-           memcmp(a->tokens, b->tokens, a->length) == 0;
+           memcmp(a->tokens,
+                  b->tokens,
+                  (size_t)a->length * sizeof(a->tokens[0])) == 0;
 }
 
 void wearable_config_set_defaults(wearable_config_t *out)
@@ -19,38 +22,56 @@ void wearable_config_set_defaults(wearable_config_t *out)
     out->multi_click_gap_ms = 300;
     out->long_press_ms = 1200;
     out->sequence_gap_ms = 300;
-    out->mapping_count = 5;
+    out->chord_window_ms = 60;
+    out->mapping_count = 6;
 
     out->mappings[0] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_POINT_A,
-        .sequence = {1, {wearable_token(WEARABLE_BUTTON_A, WEARABLE_PRIMITIVE_CLICK)}},
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_A,
+                                        WEARABLE_PRIMITIVE_CLICK)}},
     };
     out->mappings[1] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_POINT_B,
-        .sequence = {1, {wearable_token(WEARABLE_BUTTON_B, WEARABLE_PRIMITIVE_CLICK)}},
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_B,
+                                        WEARABLE_PRIMITIVE_CLICK)}},
     };
     out->mappings[2] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_MOMENT,
-        .sequence = {1, {wearable_token(WEARABLE_BUTTON_MOMENT, WEARABLE_PRIMITIVE_CLICK)}},
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_MOMENT,
+                                        WEARABLE_PRIMITIVE_CLICK)}},
     };
     out->mappings[3] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_UNDO,
-        .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO, WEARABLE_PRIMITIVE_CLICK)}},
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO,
+                                        WEARABLE_PRIMITIVE_CLICK)}},
     };
     out->mappings[4] = (wearable_mapping_t){
         .enabled = true,
+        .action = WEARABLE_ACTION_UNDO,
+        .sequence = {1, {wearable_token_from_mask(
+            (uint8_t)((1u << WEARABLE_BUTTON_A) |
+                      (1u << WEARABLE_BUTTON_B)),
+            WEARABLE_PRIMITIVE_CHORD)}},
+    };
+    out->mappings[5] = (wearable_mapping_t){
+        .enabled = true,
         .action = WEARABLE_ACTION_ENTER_PAIRING,
-        .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO, WEARABLE_PRIMITIVE_LONG)}},
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO,
+                                        WEARABLE_PRIMITIVE_LONG)}},
     };
 
-    out->action_sounds[WEARABLE_ACTION_POINT_A] = (wearable_tone_t){1800, 350, 70};
-    out->action_sounds[WEARABLE_ACTION_POINT_B] = (wearable_tone_t){1800, 350, 70};
-    out->action_sounds[WEARABLE_ACTION_MOMENT]  = (wearable_tone_t){2400, 300, 90};
-    out->action_sounds[WEARABLE_ACTION_UNDO]    = (wearable_tone_t){650, 400, 120};
+    out->action_sounds[WEARABLE_ACTION_POINT_A] =
+        (wearable_tone_t){1800, 350, 70};
+    out->action_sounds[WEARABLE_ACTION_POINT_B] =
+        (wearable_tone_t){1800, 350, 70};
+    out->action_sounds[WEARABLE_ACTION_MOMENT] =
+        (wearable_tone_t){2400, 300, 90};
+    out->action_sounds[WEARABLE_ACTION_UNDO] =
+        (wearable_tone_t){650, 400, 120};
 }
 
 bool wearable_config_is_valid(const wearable_config_t *config)
@@ -59,43 +80,45 @@ bool wearable_config_is_valid(const wearable_config_t *config)
         config->schema_version != WEARABLE_CONFIG_SCHEMA_VERSION ||
         config->mapping_count == 0 ||
         config->mapping_count > WEARABLE_MAX_MAPPINGS ||
-        config->multi_click_gap_ms < 120 || config->multi_click_gap_ms > 1000 ||
-        config->long_press_ms < 400 || config->long_press_ms > 5000 ||
-        config->sequence_gap_ms < 100 || config->sequence_gap_ms > 1500) {
+        config->multi_click_gap_ms < 120 ||
+        config->multi_click_gap_ms > 1000 ||
+        config->long_press_ms < 400 ||
+        config->long_press_ms > 5000 ||
+        config->sequence_gap_ms < 100 ||
+        config->sequence_gap_ms > 1500 ||
+        config->chord_window_ms < 25 ||
+        config->chord_window_ms > 250) {
         return false;
     }
 
     bool has_pairing = false;
 
-    /*
-     * The active mapping array is deliberately compact. There are no disabled
-     * holes before mapping_count; this keeps the NVS model, BLE representation
-     * and web UI representation identical.
-     */
     for (uint8_t i = 0; i < config->mapping_count; ++i) {
-        const wearable_mapping_t *m = &config->mappings[i];
+        const wearable_mapping_t *mapping = &config->mappings[i];
 
-        if (!m->enabled ||
-            m->sequence.length == 0 ||
-            m->sequence.length > WEARABLE_MAX_SEQUENCE ||
-            m->action > WEARABLE_ACTION_ENTER_PAIRING) {
+        if (!mapping->enabled ||
+            mapping->sequence.length == 0 ||
+            mapping->sequence.length > WEARABLE_MAX_SEQUENCE ||
+            mapping->action > WEARABLE_ACTION_ENTER_PAIRING) {
             return false;
         }
 
-        if (m->action == WEARABLE_ACTION_ENTER_PAIRING) {
+        if (mapping->action == WEARABLE_ACTION_ENTER_PAIRING) {
             has_pairing = true;
         }
 
-        for (uint8_t t = 0; t < m->sequence.length; ++t) {
-            if (wearable_token_button(m->sequence.tokens[t]) >= WEARABLE_BUTTON_COUNT ||
-                wearable_token_primitive(m->sequence.tokens[t]) >= WEARABLE_PRIMITIVE_COUNT) {
+        for (uint8_t t = 0; t < mapping->sequence.length; ++t) {
+            if (!wearable_token_is_valid(mapping->sequence.tokens[t])) {
                 return false;
             }
         }
 
-        for (uint8_t j = (uint8_t)(i + 1); j < config->mapping_count; ++j) {
+        for (uint8_t j = (uint8_t)(i + 1);
+             j < config->mapping_count;
+             ++j) {
             if (config->mappings[j].enabled &&
-                sequences_equal(&m->sequence, &config->mappings[j].sequence)) {
+                sequences_equal(&mapping->sequence,
+                                &config->mappings[j].sequence)) {
                 return false;
             }
         }
@@ -107,9 +130,12 @@ bool wearable_config_is_valid(const wearable_config_t *config)
 
     for (uint8_t i = 0; i < WEARABLE_ACTION_SOUND_COUNT; ++i) {
         const wearable_tone_t *tone = &config->action_sounds[i];
-        if (tone->frequency_hz < 100 || tone->frequency_hz > 8000 ||
+
+        if (tone->frequency_hz < 100 ||
+            tone->frequency_hz > 8000 ||
             tone->duty_permille > 900 ||
-            tone->duration_ms == 0 || tone->duration_ms > 2000) {
+            tone->duration_ms == 0 ||
+            tone->duration_ms > 2000) {
             return false;
         }
     }

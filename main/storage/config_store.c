@@ -3,6 +3,9 @@
 #include "config_model.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "esp_log.h"
+
+static const char *TAG = "config_store";
 
 #define NS "playmaker"
 #define KEY_CFG "config"
@@ -29,6 +32,7 @@ bool config_store_load(wearable_config_t *out)
 
     nvs_handle_t h;
     if (nvs_open(NS, NVS_READONLY, &h) != ESP_OK) {
+        ESP_LOGW(TAG, "config namespace missing; using defaults");
         wearable_config_set_defaults(out);
         return false;
     }
@@ -38,9 +42,18 @@ bool config_store_load(wearable_config_t *out)
     nvs_close(h);
 
     if (err != ESP_OK || len != sizeof(*out) || !wearable_config_is_valid(out)) {
+        ESP_LOGW(TAG,
+                 "stored config invalid/old schema err=%s len=%u; using defaults",
+                 esp_err_to_name(err),
+                 (unsigned)len);
         wearable_config_set_defaults(out);
         return false;
     }
+
+    ESP_LOGI(TAG,
+             "config loaded schema=%u mappings=%u",
+             (unsigned)out->schema_version,
+             (unsigned)out->mapping_count);
     return true;
 }
 
@@ -60,6 +73,15 @@ bool config_store_save(const wearable_config_t *config)
         err = nvs_commit(h);
     }
     nvs_close(h);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG,
+                 "config saved schema=%u mappings=%u",
+                 (unsigned)config->schema_version,
+                 (unsigned)config->mapping_count);
+    } else {
+        ESP_LOGE(TAG, "config save failed: %s", esp_err_to_name(err));
+    }
     return err == ESP_OK;
 }
 
@@ -77,7 +99,9 @@ bool config_store_load_pairing_token(uint8_t token[WEARABLE_TOKEN_LEN])
     size_t len = WEARABLE_TOKEN_LEN;
     esp_err_t err = nvs_get_blob(h, KEY_TOKEN, token, &len);
     nvs_close(h);
-    return err == ESP_OK && len == WEARABLE_TOKEN_LEN;
+    const bool ok = err == ESP_OK && len == WEARABLE_TOKEN_LEN;
+    ESP_LOGI(TAG, "pairing token %s", ok ? "loaded" : "not found");
+    return ok;
 }
 
 bool config_store_save_pairing_token(const uint8_t token[WEARABLE_TOKEN_LEN])
@@ -96,6 +120,9 @@ bool config_store_save_pairing_token(const uint8_t token[WEARABLE_TOKEN_LEN])
         err = nvs_commit(h);
     }
     nvs_close(h);
+    ESP_LOGI(TAG,
+             "pairing token save %s",
+             err == ESP_OK ? "ok" : "failed");
     return err == ESP_OK;
 }
 
@@ -114,5 +141,8 @@ bool config_store_clear_pairing_token(void)
         err = nvs_commit(h);
     }
     nvs_close(h);
+    ESP_LOGI(TAG,
+             "pairing token clear %s",
+             err == ESP_OK ? "ok" : "failed");
     return err == ESP_OK;
 }

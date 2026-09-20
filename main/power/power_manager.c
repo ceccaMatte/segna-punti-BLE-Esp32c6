@@ -4,12 +4,15 @@
 
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
 #define POWER_POLL_MS 500u
 #define BATTERY_SAMPLE_MS 5000u
+
+static const char *TAG = "power";
 
 static power_event_cb_t s_cb;
 static void *s_ctx;
@@ -146,11 +149,20 @@ static void power_task(void *arg)
             blink = false;
         }
 
-        if (charging && !last_charging && s_cb != NULL) {
-            s_cb(POWER_EVENT_CHARGING, s_ctx);
+        if (charging && !last_charging) {
+            ESP_LOGI(TAG, "charger state=charging");
+            if (s_cb != NULL) {
+                s_cb(POWER_EVENT_CHARGING, s_ctx);
+            }
         }
-        if (full && !last_full && s_cb != NULL) {
-            s_cb(POWER_EVENT_FULL, s_ctx);
+        if (full && !last_full) {
+            ESP_LOGI(TAG, "charger state=full");
+            if (s_cb != NULL) {
+                s_cb(POWER_EVENT_FULL, s_ctx);
+            }
+        }
+        if (!charging && !full && (last_charging || last_full)) {
+            ESP_LOGI(TAG, "charger state=disconnected/unknown");
         }
 
         last_charging = charging;
@@ -169,6 +181,10 @@ static void power_task(void *arg)
             !vbus_present &&
             low_battery_elapsed >= CONFIG_WEARABLE_LOW_BATTERY_BEEP_MS) {
             low_battery_elapsed = 0;
+            ESP_LOGW(TAG,
+                     "low battery mv=%u threshold=%u",
+                     (unsigned)s_battery_mv,
+                     (unsigned)CONFIG_WEARABLE_LOW_BATTERY_MV);
             if (s_cb != NULL) {
                 s_cb(POWER_EVENT_LOW_BATTERY, s_ctx);
             }

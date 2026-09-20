@@ -3,10 +3,13 @@
 ## Principio
 
 Il wearable è un terminale di input e feedback. L'autorità sul punteggio è
-l'app/server Playmaker. In particolare, l'ESP32 non deve decidere se un punto
-chiude un game, un set o il match.
+l'app/server Playmaker. L'ESP32 non decide mai se un punto chiude un game, un set
+o il match.
 
-Protocol version: **2**.
+Protocol version: **3**.
+
+La v3 mantiene ACTION/ACK della v2 e aggiorna la configurazione delle gesture:
+token a 16 bit, gesture simultanee e parametro `chord_window_ms`.
 
 ## ACTION — wearable -> app
 
@@ -25,8 +28,7 @@ Protocol version: **2**.
 
 ## ACK — app -> wearable
 
-20 byte, quindi entra anche nel payload ATT minimo senza richiedere un MTU
-maggiore:
+20 byte:
 
 | Offset | Dimensione | Campo |
 | ---: | ---: | --- |
@@ -60,47 +62,86 @@ Lo snapshot è sempre lo stato **dopo** l'elaborazione del comando.
 
 ## Idempotenza
 
-La web app deve conservare l'esito di ogni `(session_id, sequence)` almeno per
-la durata della sessione. Se riceve lo stesso comando una seconda volta perché
-l'ACK precedente è andato perso, **non applica di nuovo il punto**: restituisce
-lo stesso ACK già prodotto, inclusi snapshot e transition flags.
+Se l'app riceve di nuovo lo stesso `(session_id, sequence)` perché un ACK è
+andato perso, non applica nuovamente l'azione: restituisce lo stesso risultato.
+
+Su `TEMPORARY_ERROR` il wearable mantiene lo stesso comando e lo stesso ID in
+coda. `OK` e `REJECTED` sono terminali.
+
+## Token gesture v3
+
+Ogni step di una sequenza è un `uint16 little-endian`:
+
+| Bit | Contenuto |
+| --- | --- |
+| 0..3 | button mask: A, B, Moment, Undo |
+| 4..6 | primitive |
+| 7..15 | reserved = 0 |
+
+Primitive:
+
+- 0 = click
+- 1 = double click
+- 2 = triple click
+- 3 = long press
+- 4 = chord/simultanea
+
+Per click/double/triple/long la mask deve contenere esattamente un pulsante.
+Per chord deve contenerne almeno due.
+
+## CONFIG read
+
+Header da 11 byte:
+
+| Offset | Dimensione | Campo |
+| ---: | ---: | --- |
+| 0 | 1 | protocol version |
+| 1 | 1 | message type = CONFIG |
+| 2 | 1 | mapping count |
+| 3 | 2 | multi-click gap ms |
+| 5 | 2 | long press ms |
+| 7 | 2 | sequence gap ms |
+| 9 | 2 | chord window ms |
+
+Segue ogni mapping, 18 byte:
+
+- action: 1 byte
+- sequence length: 1 byte
+- 8 token × 2 byte little-endian
+
+Infine 4 sound descriptor da 6 byte: frequency, duty-permille, duration.
+
+## CONFIG write
+
+- `0x10 SET_MAPPING`: 20 byte totali; index, action, length, 8 token uint16
+- `0x11 DELETE_MAPPING`: 2 byte
+- `0x12 SET_ACTION_SOUND`: 8 byte
+- `0x13 SET_TIMINGS`: 9 byte, inclusa chord window
+- `0x14 RESET_DEFAULTS`: 1 byte
+
+Ogni write viene prima validata, poi salvata in NVS e solo dopo pubblicata alla
+configurazione runtime.
+
+## Esempio A+B simultanei -> UNDO
+
+Il default include una seconda gesture per UNDO:
+
+```text
+mask = A | B = 0b0011
+primitive = CHORD = 4
+token = (4 << 4) | 3 = 0x0043
+```
+
+Quando la chord viene riconosciuta i click individuali A e B vengono soppressi.
 
 ## Modifiche fatte dall'app
 
-Le modifiche fatte direttamente dal telefono vengono applicate al motore
-autorevole prima dei comandi successivi del wearable.
-
-Esempio:
-
-1. dall'app l'utente porta A a 40;
-2. il wearable invia `POINT_A`;
-3. il motore applica il punto allo stato corrente e chiude il game;
-4. l'ACK torna con il nuovo score e `GAME_ENDED`;
-5. il wearable suona conferma + melodia game.
-
-Il wearable non confronta localmente 40 -> game e non mantiene un secondo
-motore di scoring.
-
-## Priorità feedback
-
-Su ACK `OK`:
-
-1. suono di conferma dell'azione;
-2. `MATCH_ENDED`, se presente;
-3. altrimenti `SET_ENDED`;
-4. altrimenti `GAME_ENDED`.
-
-Su `REJECTED` il comando è terminale: viene rimosso dalla coda e il wearable
-riproduce il suono di errore.
-
-Su `TEMPORARY_ERROR` il comando **resta in coda con lo stesso
-`session_id + sequence`** e viene ritentato. Il wearable non crea un nuovo ID,
-quindi un problema temporaneo non può trasformarsi in un doppio punto. Dopo un
-numero massimo di tentativi il comando viene abbandonato e viene emesso il
-feedback di errore.
+Se l'utente cambia il punteggio dal telefono, il successivo ACTION del wearable
+viene applicato a quello stato aggiornato. Se chiude un game, l'ACK contiene
+`GAME_ENDED` e il wearable suona la relativa melodia.
 
 ## Pagina web-wearable
 
-La pagina `web-wearable` è una pagina di configurazione/collaudo, non il motore
-partita. Per i test invia ACK v2 con stato neutro. L'integrazione Playmaker reale
-deve sostituire quel mock con lo stato restituito dal motore partita.
+È una pagina di configurazione/collaudo, non il motore partita. Durante i test
+risponde agli ACTION con ACK neutro. Tutti gli eventi di trasporto sono
+tracciati nella console del browser con prefisso `[Playmaker][BLE]`.

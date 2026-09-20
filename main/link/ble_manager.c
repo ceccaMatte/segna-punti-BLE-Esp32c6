@@ -357,8 +357,23 @@ static int handle_ack_write(struct ble_gatt_access_ctxt *ctxt)
 
     wearable_ack_packet_t ack;
     if (!wearable_decode_ack(payload, sizeof(payload), &ack)) {
+        ESP_LOGW(TAG, "invalid ACK payload");
         return BLE_ATT_ERR_UNLIKELY;
     }
+
+    ESP_LOGI(TAG,
+             "ACK rx session=%lu seq=%lu status=%u flags=0x%02x rev=%u score=%u-%u games=%u-%u sets=%u-%u",
+             (unsigned long)ack.session_id,
+             (unsigned long)ack.sequence,
+             (unsigned)ack.status,
+             (unsigned)ack.transition_flags,
+             (unsigned)ack.state.revision,
+             (unsigned)ack.state.points_a,
+             (unsigned)ack.state.points_b,
+             (unsigned)ack.state.games_a,
+             (unsigned)ack.state.games_b,
+             (unsigned)ack.state.sets_a,
+             (unsigned)ack.state.sets_b);
 
     wearable_action_t action = WEARABLE_ACTION_POINT_A;
     bool terminal = false;
@@ -413,7 +428,7 @@ static int handle_config_access(struct ble_gatt_access_ctxt *ctxt)
     }
 
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
-        uint8_t snapshot[256];
+        uint8_t snapshot[WEARABLE_CONFIG_MAX_WIRE_SIZE];
         const size_t size =
             wearable_encode_config(s_config,
                                    snapshot,
@@ -458,6 +473,13 @@ static int handle_config_access(struct ble_gatt_access_ctxt *ctxt)
         }
 
         *s_config = next;
+        ESP_LOGI(TAG,
+                 "config persisted mappings=%u multi=%u long=%u sequence=%u chord=%u",
+                 (unsigned)s_config->mapping_count,
+                 (unsigned)s_config->multi_click_gap_ms,
+                 (unsigned)s_config->long_press_ms,
+                 (unsigned)s_config->sequence_gap_ms,
+                 (unsigned)s_config->chord_window_ms);
         app_event(BLE_APP_CONFIG_CHANGED);
         return 0;
     }

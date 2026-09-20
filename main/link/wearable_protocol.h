@@ -7,12 +7,13 @@
 #include "wearable_types.h"
 
 /*
- * Protocol v2:
- * the wearable never computes padel scoring. The app/server is authoritative.
- * Every terminal ACK returns the authoritative match state AFTER the requested
- * action has been processed, plus transition flags for sound feedback.
+ * Protocol v3 adds 16-bit gesture tokens, simultaneous-button CHORD gestures
+ * and chord_window_ms to the configurable timing set.
+ *
+ * ACTION / ACK semantics remain authoritative: the wearable never computes
+ * padel scoring locally.
  */
-#define WEARABLE_PROTOCOL_VERSION 2u
+#define WEARABLE_PROTOCOL_VERSION 3u
 
 #define WEARABLE_UUID_SERVICE "c4d10001-6f65-4b6e-ae30-706c61796d6b"
 #define WEARABLE_UUID_ACTION  "c4d10002-6f65-4b6e-ae30-706c61796d6b"
@@ -29,6 +30,10 @@
 #define WEARABLE_ACTION_PACKET_SIZE 12u
 #define WEARABLE_ACK_PACKET_SIZE 20u
 #define WEARABLE_STATUS_PACKET_SIZE 10u
+
+#define WEARABLE_CONFIG_HEADER_SIZE 11u
+#define WEARABLE_CONFIG_MAPPING_WIRE_SIZE     (2u + (2u * WEARABLE_MAX_SEQUENCE))
+#define WEARABLE_CONFIG_MAX_WIRE_SIZE     (WEARABLE_CONFIG_HEADER_SIZE +      (WEARABLE_MAX_MAPPINGS * WEARABLE_CONFIG_MAPPING_WIRE_SIZE) +      (WEARABLE_ACTION_SOUND_COUNT * 6u))
 
 typedef enum {
     WEARABLE_ACK_OK = 0,
@@ -60,11 +65,23 @@ typedef struct {
     wearable_match_state_t state;
 } wearable_ack_packet_t;
 
-size_t wearable_encode_action(const wearable_action_packet_t *p, uint8_t *out, size_t cap);
-bool wearable_decode_ack(const uint8_t *in, size_t len, wearable_ack_packet_t *out);
+size_t wearable_encode_action(const wearable_action_packet_t *packet,
+                              uint8_t *out,
+                              size_t capacity);
+bool wearable_decode_ack(const uint8_t *in,
+                         size_t len,
+                         wearable_ack_packet_t *out);
 
-size_t wearable_encode_status(bool commissioned, bool authenticated, bool pairing_open,
-                              uint16_t battery_mv, uint8_t *out, size_t cap);
+size_t wearable_encode_status(bool commissioned,
+                              bool authenticated,
+                              bool pairing_open,
+                              uint16_t battery_mv,
+                              uint8_t *out,
+                              size_t capacity);
 
-size_t wearable_encode_config(const wearable_config_t *cfg, uint8_t *out, size_t cap);
-bool wearable_apply_config_command(wearable_config_t *cfg, const uint8_t *in, size_t len);
+size_t wearable_encode_config(const wearable_config_t *config,
+                              uint8_t *out,
+                              size_t capacity);
+bool wearable_apply_config_command(wearable_config_t *config,
+                                   const uint8_t *in,
+                                   size_t len);

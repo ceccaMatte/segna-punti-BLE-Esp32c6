@@ -10,23 +10,27 @@
 #define CONFIG_CMD_SET_TIMINGS 0x13u
 #define CONFIG_CMD_RESET_DEFAULTS 0x14u
 
-static void put16(uint8_t *p, uint16_t v)
+#define CONFIG_SET_MAPPING_PACKET_SIZE     (4u + (2u * WEARABLE_MAX_SEQUENCE))
+#define CONFIG_SET_TIMINGS_PACKET_SIZE 9u
+
+static void put16(uint8_t *p, uint16_t value)
 {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
 }
 
 static uint16_t get16(const uint8_t *p)
 {
-    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+    return (uint16_t)p[0] |
+           ((uint16_t)p[1] << 8);
 }
 
-static void put32(uint8_t *p, uint32_t v)
+static void put32(uint8_t *p, uint32_t value)
 {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
-    p[2] = (uint8_t)(v >> 16);
-    p[3] = (uint8_t)(v >> 24);
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+    p[2] = (uint8_t)(value >> 16);
+    p[3] = (uint8_t)(value >> 24);
 }
 
 static uint32_t get32(const uint8_t *p)
@@ -37,25 +41,32 @@ static uint32_t get32(const uint8_t *p)
            ((uint32_t)p[3] << 24);
 }
 
-size_t wearable_encode_action(const wearable_action_packet_t *p, uint8_t *out, size_t cap)
+size_t wearable_encode_action(const wearable_action_packet_t *packet,
+                              uint8_t *out,
+                              size_t capacity)
 {
-    if (p == NULL || out == NULL || cap < WEARABLE_ACTION_PACKET_SIZE ||
-        p->action > WEARABLE_ACTION_UNDO) {
+    if (packet == NULL ||
+        out == NULL ||
+        capacity < WEARABLE_ACTION_PACKET_SIZE ||
+        packet->action > WEARABLE_ACTION_UNDO) {
         return 0;
     }
 
     out[0] = WEARABLE_PROTOCOL_VERSION;
     out[1] = WEARABLE_MSG_ACTION;
-    put32(&out[2], p->session_id);
-    put32(&out[6], p->sequence);
-    out[10] = (uint8_t)p->action;
+    put32(&out[2], packet->session_id);
+    put32(&out[6], packet->sequence);
+    out[10] = (uint8_t)packet->action;
     out[11] = 0;
     return WEARABLE_ACTION_PACKET_SIZE;
 }
 
-bool wearable_decode_ack(const uint8_t *in, size_t len, wearable_ack_packet_t *out)
+bool wearable_decode_ack(const uint8_t *in,
+                         size_t len,
+                         wearable_ack_packet_t *out)
 {
-    if (in == NULL || out == NULL ||
+    if (in == NULL ||
+        out == NULL ||
         len != WEARABLE_ACK_PACKET_SIZE ||
         in[0] != WEARABLE_PROTOCOL_VERSION ||
         in[1] != WEARABLE_MSG_ACK ||
@@ -79,10 +90,15 @@ bool wearable_decode_ack(const uint8_t *in, size_t len, wearable_ack_packet_t *o
     return true;
 }
 
-size_t wearable_encode_status(bool commissioned, bool authenticated, bool pairing_open,
-                              uint16_t battery_mv, uint8_t *out, size_t cap)
+size_t wearable_encode_status(bool commissioned,
+                              bool authenticated,
+                              bool pairing_open,
+                              uint16_t battery_mv,
+                              uint8_t *out,
+                              size_t capacity)
 {
-    if (out == NULL || cap < WEARABLE_STATUS_PACKET_SIZE) {
+    if (out == NULL ||
+        capacity < WEARABLE_STATUS_PACKET_SIZE) {
         return 0;
     }
 
@@ -96,72 +112,100 @@ size_t wearable_encode_status(bool commissioned, bool authenticated, bool pairin
     return WEARABLE_STATUS_PACKET_SIZE;
 }
 
-size_t wearable_encode_config(const wearable_config_t *cfg, uint8_t *out, size_t cap)
+size_t wearable_encode_config(const wearable_config_t *config,
+                              uint8_t *out,
+                              size_t capacity)
 {
-    if (!wearable_config_is_valid(cfg) || out == NULL) {
+    if (!wearable_config_is_valid(config) ||
+        out == NULL) {
         return 0;
     }
 
-    size_t wanted = 9u +
-                    (size_t)cfg->mapping_count * (2u + WEARABLE_MAX_SEQUENCE) +
-                    WEARABLE_ACTION_SOUND_COUNT * 6u;
-    if (cap < wanted) {
+    const size_t wanted =
+        WEARABLE_CONFIG_HEADER_SIZE +
+        (size_t)config->mapping_count *
+            WEARABLE_CONFIG_MAPPING_WIRE_SIZE +
+        WEARABLE_ACTION_SOUND_COUNT * 6u;
+
+    if (capacity < wanted) {
         return 0;
     }
 
     out[0] = WEARABLE_PROTOCOL_VERSION;
     out[1] = WEARABLE_MSG_CONFIG;
-    out[2] = cfg->mapping_count;
-    put16(&out[3], cfg->multi_click_gap_ms);
-    put16(&out[5], cfg->long_press_ms);
-    put16(&out[7], cfg->sequence_gap_ms);
+    out[2] = config->mapping_count;
+    put16(&out[3], config->multi_click_gap_ms);
+    put16(&out[5], config->long_press_ms);
+    put16(&out[7], config->sequence_gap_ms);
+    put16(&out[9], config->chord_window_ms);
 
-    size_t o = 9;
-    for (uint8_t i = 0; i < cfg->mapping_count; ++i) {
-        const wearable_mapping_t *m = &cfg->mappings[i];
-        out[o++] = (uint8_t)m->action;
-        out[o++] = m->sequence.length;
-        memset(&out[o], 0, WEARABLE_MAX_SEQUENCE);
-        memcpy(&out[o], m->sequence.tokens, m->sequence.length);
-        o += WEARABLE_MAX_SEQUENCE;
+    size_t offset = WEARABLE_CONFIG_HEADER_SIZE;
+
+    for (uint8_t i = 0;
+         i < config->mapping_count;
+         ++i) {
+        const wearable_mapping_t *mapping =
+            &config->mappings[i];
+
+        out[offset++] = (uint8_t)mapping->action;
+        out[offset++] = mapping->sequence.length;
+
+        for (uint8_t t = 0;
+             t < WEARABLE_MAX_SEQUENCE;
+             ++t) {
+            const wearable_token_t token =
+                t < mapping->sequence.length
+                    ? mapping->sequence.tokens[t]
+                    : 0u;
+            put16(&out[offset], token);
+            offset += 2;
+        }
     }
 
-    for (uint8_t i = 0; i < WEARABLE_ACTION_SOUND_COUNT; ++i) {
-        put16(&out[o], cfg->action_sounds[i].frequency_hz); o += 2;
-        put16(&out[o], cfg->action_sounds[i].duty_permille); o += 2;
-        put16(&out[o], cfg->action_sounds[i].duration_ms); o += 2;
+    for (uint8_t i = 0;
+         i < WEARABLE_ACTION_SOUND_COUNT;
+         ++i) {
+        put16(&out[offset],
+              config->action_sounds[i].frequency_hz);
+        offset += 2;
+        put16(&out[offset],
+              config->action_sounds[i].duty_permille);
+        offset += 2;
+        put16(&out[offset],
+              config->action_sounds[i].duration_ms);
+        offset += 2;
     }
 
-    return o;
+    return offset;
 }
 
-bool wearable_apply_config_command(wearable_config_t *cfg, const uint8_t *in, size_t len)
+bool wearable_apply_config_command(wearable_config_t *config,
+                                   const uint8_t *in,
+                                   size_t len)
 {
-    if (cfg == NULL || in == NULL || len == 0) {
+    if (config == NULL ||
+        in == NULL ||
+        len == 0u) {
         return false;
     }
 
-    wearable_config_t next = *cfg;
+    wearable_config_t next = *config;
 
     switch (in[0]) {
     case CONFIG_CMD_SET_MAPPING: {
-        if (len != 12u) {
+        if (len != CONFIG_SET_MAPPING_PACKET_SIZE) {
             return false;
         }
 
         const uint8_t index = in[1];
         const uint8_t action = in[2];
-        const uint8_t n = in[3];
+        const uint8_t token_count = in[3];
 
-        /*
-         * An existing mapping may be replaced, or exactly one new mapping may
-         * be appended. Skipping indices would create disabled holes that the
-         * BLE representation cannot express.
-         */
         if (index > next.mapping_count ||
             index >= WEARABLE_MAX_MAPPINGS ||
             action > WEARABLE_ACTION_ENTER_PAIRING ||
-            n == 0 || n > WEARABLE_MAX_SEQUENCE) {
+            token_count == 0u ||
+            token_count > WEARABLE_MAX_SEQUENCE) {
             return false;
         }
 
@@ -169,35 +213,52 @@ bool wearable_apply_config_command(wearable_config_t *cfg, const uint8_t *in, si
             next.mapping_count++;
         }
 
-        wearable_mapping_t *m = &next.mappings[index];
-        memset(m, 0, sizeof(*m));
-        m->enabled = true;
-        m->action = (wearable_action_t)action;
-        m->sequence.length = n;
-        memcpy(m->sequence.tokens, &in[4], n);
+        wearable_mapping_t *mapping =
+            &next.mappings[index];
+        memset(mapping, 0, sizeof(*mapping));
+        mapping->enabled = true;
+        mapping->action = (wearable_action_t)action;
+        mapping->sequence.length = token_count;
+
+        for (uint8_t t = 0;
+             t < token_count;
+             ++t) {
+            mapping->sequence.tokens[t] =
+                get16(&in[4u + (2u * t)]);
+        }
         break;
     }
 
     case CONFIG_CMD_DELETE_MAPPING: {
-        if (len != 2u || in[1] >= next.mapping_count) {
+        if (len != 2u ||
+            in[1] >= next.mapping_count) {
             return false;
         }
 
-        const uint8_t idx = in[1];
-        for (uint8_t i = idx; i + 1u < next.mapping_count; ++i) {
-            next.mappings[i] = next.mappings[i + 1u];
+        const uint8_t index = in[1];
+
+        for (uint8_t i = index;
+             i + 1u < next.mapping_count;
+             ++i) {
+            next.mappings[i] =
+                next.mappings[i + 1u];
         }
+
         next.mapping_count--;
-        memset(&next.mappings[next.mapping_count], 0, sizeof(next.mappings[0]));
+        memset(&next.mappings[next.mapping_count],
+               0,
+               sizeof(next.mappings[0]));
         break;
     }
 
     case CONFIG_CMD_SET_ACTION_SOUND: {
-        if (len != 8u || in[1] >= WEARABLE_ACTION_SOUND_COUNT) {
+        if (len != 8u ||
+            in[1] >= WEARABLE_ACTION_SOUND_COUNT) {
             return false;
         }
 
-        wearable_tone_t *tone = &next.action_sounds[in[1]];
+        wearable_tone_t *tone =
+            &next.action_sounds[in[1]];
         tone->frequency_hz = get16(&in[2]);
         tone->duty_permille = get16(&in[4]);
         tone->duration_ms = get16(&in[6]);
@@ -205,18 +266,21 @@ bool wearable_apply_config_command(wearable_config_t *cfg, const uint8_t *in, si
     }
 
     case CONFIG_CMD_SET_TIMINGS:
-        if (len != 7u) {
+        if (len != CONFIG_SET_TIMINGS_PACKET_SIZE) {
             return false;
         }
+
         next.sequence_gap_ms = get16(&in[1]);
         next.multi_click_gap_ms = get16(&in[3]);
         next.long_press_ms = get16(&in[5]);
+        next.chord_window_ms = get16(&in[7]);
         break;
 
     case CONFIG_CMD_RESET_DEFAULTS:
         if (len != 1u) {
             return false;
         }
+
         wearable_config_set_defaults(&next);
         break;
 
@@ -228,6 +292,6 @@ bool wearable_apply_config_command(wearable_config_t *cfg, const uint8_t *in, si
         return false;
     }
 
-    *cfg = next;
+    *config = next;
     return true;
 }
