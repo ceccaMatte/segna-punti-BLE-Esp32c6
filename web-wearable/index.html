@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Playmaker Wearable Config</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:1050px;margin:32px auto;padding:0 16px;background:#f5f5f7;color:#151515}
+    .card{background:white;border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 1px 8px #0001}
+    button,input,select{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid #ccc}
+    button{cursor:pointer}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+    .mapping{border-top:1px solid #eee;padding-top:12px;margin-top:12px}
+    .ok{color:#087f23}.bad{color:#b00020}
+  </style>
+</head>
+<body>
+  <h1>Playmaker Wearable</h1>
+  <div class="card">
+    <div class="row">
+      <button id="connect">Connetti / Pair</button>
+      <button id="auto">Riconnetti</button>
+      <span id="status">Non connesso</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Timing gesture</h2>
+    <div class="row">
+      <label>Sequenza <input id="seqGap" type="number" min="100" max="1500"> ms</label>
+      <label>Multi-click <input id="multiGap" type="number" min="120" max="1000"> ms</label>
+      <label>Long press <input id="longMs" type="number" min="400" max="5000"> ms</label>
+      <button id="saveTiming">Salva timing</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Gesture → azione</h2>
+    <div id="mappings"></div>
+    <button id="addMapping">Aggiungi gesture</button>
+  </div>
+
+  <div class="card">
+    <h2>Suoni azioni</h2>
+    <div id="sounds"></div>
+  </div>
+
+  <div class="card">
+    <button id="defaults">Ripristina configurazione di default</button>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

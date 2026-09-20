@@ -1,61 +1,14 @@
-# Configurazione predefinita per il segnapunti padel
-# su Waveshare ESP32-C6-LCD-1.47.
-#
-# SPDX-License-Identifier: MIT
-
-# --- Target ---------------------------------------------------------------
-# Permette di compilare da un albero pulito senza eseguire prima
-# "idf.py set-target".
-CONFIG_IDF_TARGET="esp32c6"
-CONFIG_IDF_TARGET_ESP32C6=y
-
-# --- Console --------------------------------------------------------------
-# La scheda NON ha nessun convertitore USB-seriale. Il connettore USB-C va
-# dritto nel controllo USB Serial/JTAG del chip, quindi quella e' l'unica porta
-# che un monitor seriale possa usare.
-#
-# Di suo ESP-IDF manda la console principale sull'UART0 e si limita a copiarla
-# sul USB Serial/JTAG senza bloccarsi. Scegliendo quest'ultimo come console
-# principale si ottiene una scrittura che aspetta di essere letta, e quindi un
-# monitor che funziona davvero.
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-
-# --- Flash ----------------------------------------------------------------
-# 4 MB di memoria flash, capace di quattro linee ma pilotata a due dal
-# produttore.
-CONFIG_ESPTOOLPY_FLASHMODE="dio"
-CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_STR=y
-CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
-CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
-
-# --- Sistema --------------------------------------------------------------
-# Il battito del sistema scende da 10 a 1 millisecondo. Serve al ciclo
-# principale, che gira ogni 5 millisecondi per riconoscere i click multipli:
-# con il battito a 10 millisecondi una pausa di 5 verrebbe arrotondata a zero.
-CONFIG_FREERTOS_HZ=1000
-
-# Il ciclo principale non fa quasi niente, ma legge il pulsante e ogni tanto
-# ridisegna. Lo spazio predefinito e' un po' stretto.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
-
-# --- Bluetooth ------------------------------------------------------------
-# La pagina web si collega in Bluetooth a basso consumo. Fra i due stack di
-# ESP-IDF si sceglie NimBLE: fa le stesse cose di Bluedroid con molta meno
-# memoria, e a un segnapunti serve solo fare da periferica.
-#
-# La memoria permanente che NimBLE si porta dietro e' la stessa che usa il
-# token di associazione.
+# Playmaker wearable - ESP32-C3 / ESP-IDF
+CONFIG_IDF_TARGET="esp32c3"
+CONFIG_IDF_TARGET_ESP32C3=y
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_BLUEDROID_ENABLED=n
-
-# Una connessione alla volta: la partita la guarda una persona sola, e ogni
-# connessione in piu' costa memoria che su questa scheda non avanza.
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
-
-# Ruolo di periferica soltanto: la scheda si fa trovare e aspetta.
 CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
 CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
 CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
-CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
+CONFIG_NVS_ENCRYPTION=n

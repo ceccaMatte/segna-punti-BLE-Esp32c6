@@ -1,228 +1,60 @@
-menu "Segnapunti padel"
+menu "Playmaker wearable"
 
-    comment "Schermo"
+config WEARABLE_BUTTON_1_GPIO
+    int "Button 1 GPIO"
+    default 4
+config WEARABLE_BUTTON_2_GPIO
+    int "Button 2 GPIO"
+    default 5
+config WEARABLE_BUTTON_3_GPIO
+    int "Button 3 GPIO"
+    default 6
+config WEARABLE_BUTTON_4_GPIO
+    int "Button 4 GPIO"
+    default 7
+config WEARABLE_BUTTON_ACTIVE_LOW
+    bool "Buttons are active low"
+    default y
 
-    config PADEL_BACKLIGHT_PERMILLE
-        int "Luminosita' della retroilluminazione (millesimi)"
-        default 500
-        range 0 500
-        help
-            Luminosita' dello schermo, da 0 a 500 cioe' meta' della potenza
-            massima. Il produttore avverte che tenere la retroilluminazione al
-            massimo per molte ore lascia un alone permanente sul pannello,
-            quindi il limite superiore e' volutamente 500.
+config WEARABLE_BUZZER_GPIO
+    int "Passive buzzer GPIO"
+    default 10
 
-    config PADEL_DISPLAY_TEST_PATTERN
-        bool "Mostra la figura di prova all'avvio"
-        default n
-        help
-            Riempie lo schermo con quattro barre verticali e una squadretta
-            nell'angolo in alto a sinistra. Serve al primo montaggio per
-            verificare che i colori siano quelli giusti e che l'immagine non
-            sia specchiata, ruotata o tagliata.
+config WEARABLE_CHARGE_LED_GPIO
+    int "Charge status LED GPIO (-1 disables)"
+    default -1
+config WEARABLE_CHARGING_GPIO
+    int "Charger CHRG/status input GPIO (-1 disables)"
+    default -1
+config WEARABLE_CHARGING_ACTIVE_LOW
+    bool "Charger status input is active low"
+    default y
+config WEARABLE_POWER_PRESENT_GPIO
+    int "USB/power-present input GPIO (-1 if unavailable)"
+    default -1
+config WEARABLE_POWER_PRESENT_ACTIVE_HIGH
+    bool "Power-present input is active high"
+    default y
 
-            Va lasciata spenta durante il gioco: la figura resta finche' non
-            viene ridisegnata la schermata.
+config WEARABLE_BATTERY_ADC_CHANNEL
+    int "ADC1 channel for battery divider (-1 disables)"
+    range -1 4
+    default -1
+config WEARABLE_BATTERY_DIVIDER_NUM
+    int "Battery divider numerator"
+    default 2
+config WEARABLE_BATTERY_DIVIDER_DEN
+    int "Battery divider denominator"
+    default 1
+config WEARABLE_LOW_BATTERY_MV
+    int "Low battery threshold (mV)"
+    default 3300
+config WEARABLE_LOW_BATTERY_BEEP_MS
+    int "Low battery reminder period (ms)"
+    default 20000
 
-    comment "LED RGB"
-
-    config PADEL_LED_BRIGHTNESS
-        int "Luminosita' del LED (millesimi)"
-        default 400
-        range 0 1000
-        help
-            Quanto e' luminoso il LED di bordo. Il limite vale per tutti i
-            colori, spettacolo di luci compreso, cosi' il lampo di un punto non
-            e' mai piu' forte del colore che resta acceso alla fine.
-
-            Un WS2812 tenuto al massimo acceca: a mezzo metro e' fastidioso da
-            guardare e di sera illumina la stanza. A zero il LED resta spento.
-
-    comment "Bluetooth e commissioning"
-
-    config PADEL_COMMISSIONING_GPIO
-        int "Piedino che apre la finestra di commissioning"
-        default 0
-        range 0 30
-        help
-            Tenuto verso massa per il tempo indicato qui sotto, questo piedino
-            cancella l'associazione salvata e riapre la finestra per associare
-            una pagina web nuova.
-
-            Sulla scheda il piedino 0 e' libero: il display usa 6, 7, 14, 15,
-            21 e 22, la microSD 4 e 5, il LED di bordo l'8 e il pulsante di
-            gioco il 9. Non e' nemmeno uno dei piedini che il chip legge
-            all'accensione, quindi non disturba l'avvio.
-
-    config PADEL_COMMISSIONING_HOLD_MS
-        int "Tenuta per aprire la finestra (ms)"
-        default 3000
-        range 500 20000
-        help
-            Per quanto il piedino deve restare verso massa prima che la
-            finestra si apra. Il gesto scatta una volta sola: il piedino deve
-            tornare alto, e solo dopo si puo' richiedere una nuova finestra.
-
-    config PADEL_COMMISSIONING_WINDOW_MS
-        int "Durata della finestra (ms)"
-        default 60000
-        range 5000 600000
-        help
-            Per quanto la scheda resta disponibile ad accettare una nuova
-            associazione. Scaduta la finestra si torna a giocare e la scheda
-            resta non associata, com'era prima.
-
-    config PADEL_COMMISSIONING_NOTICE_MS
-        int "Durata dell'esito a video (ms)"
-        default 2000
-        range 500 10000
-        help
-            Per quanto resta a video l'esito del commissioning, prima che lo
-            schermo torni al punteggio.
-
-    comment "Pulsante"
-
-    config PADEL_BUTTON_DEBOUNCE_MS
-        int "Rimbalzo ignorato (ms)"
-        default 25
-        range 1 200
-        help
-            Per quanto tempo il livello del piedino deve restare stabile prima
-            di essere accettato. Valori piu' bassi reagiscono prima ma lasciano
-            passare piu' rimbalzi.
-
-    config PADEL_MULTI_CLICK_MS
-        int "Finestra per i click multipli (ms)"
-        default 400
-        range 150 1000
-        help
-            Quanto si aspetta, dopo un click, per vedere se ne arriva un altro.
-            Un click solo viene eseguito alla scadenza di questa finestra, non
-            al rilascio del pulsante.
-
-            Alzandola si diventa piu' tolleranti con chi clicca piano, ma il
-            punteggio cambia con piu' ritardo.
-
-    config PADEL_MOMENT_MIN_MS
-        int "Pressione minima per il MOMENT (ms)"
-        default 800
-        range 300 4000
-        help
-            Una pressione rilasciata dopo questo tempo non e' un click: e' un
-            MOMENT, cioe' un segno nel tempo che non tocca il punteggio. Il
-            gesto si decide al rilascio, quindi tenendo premuto piu' a lungo si
-            puo' ancora arrivare alla soglia del commissioning.
-
-            Sotto questo tempo la pressione entra nella conta dei click, che
-            distingue uno, due, tre e quattro click.
-
-    config PADEL_PAIRING_HOLD_MS
-        int "Pressione per aprire il commissioning (ms)"
-        default 5000
-        range 1500 30000
-        help
-            Tenendo premuto fino a questa soglia la finestra di commissioning
-            si apre subito, senza aspettare il rilascio: l'associazione salvata
-            viene cancellata e la scheda torna disponibile per una pagina web
-            nuova.
-
-            Serve a chi non vuole attaccare un pulsante o un filo al piedino di
-            commissioning: lo stesso gesto si fa con l'unico tasto di bordo,
-            che e' li' sotto il pollice. Deve essere maggiore della soglia del
-            MOMENT: con i due valori invertiti la compilazione si ferma con un
-            errore, invece di lasciare un gesto che non si distingue.
-
-    config PADEL_HOLD_HINT_MS
-        int "Avviso durante la pressione lunga (ms)"
-        default 3000
-        range 1000 4500
-        help
-            Da quanto il pulsante e' tenuto premuto prima che lo schermo mostri
-            l'avviso che, continuando, si apre il commissioning. Senza, chi
-            tiene premuto non ha modo di sapere che il gesto e' cominciato: lo
-            scoprirebbe solo al rilascio, quando ormai e' tardi.
-
-            Deve stare fra la soglia del MOMENT e quella del commissioning:
-            prima non c'e' niente da annunciare, dopo la finestra si e' gia'
-            aperta.
-
-    config PADEL_FINAL_SCREEN_MS
-        int "Durata della schermata del vincitore (ms)"
-        default 4000
-        range 1000 60000
-        help
-            Per quanto resta a video chi ha vinto, prima che la partita
-            ricominci da sola. In questo tempo si puo' ancora annullare la
-            palla che ha chiuso il match con tre click, oppure azzerare subito
-            con quattro click.
-
-    comment "Partita"
-
-    choice PADEL_FIRST_SERVER
-        prompt "Chi serve per primo"
-        default PADEL_FIRST_SERVER_NOI
-        help
-            Squadra che batte il primo game. Nel padel il primo servizio viene
-            sorteggiato, quindi non c'e' una risposta giusta: si sceglie qui.
-
-        config PADEL_FIRST_SERVER_NOI
-            bool "NOI (pannello di destra)"
-
-        config PADEL_FIRST_SERVER_LORO
-            bool "LORO (pannello di sinistra)"
-    endchoice
-
-    config PADEL_SETS_TO_WIN
-        int "Set necessari per vincere"
-        default 3
-        range 1 5
-        help
-            Al meglio dei 2*N-1 set. Con il valore predefinito 3 si gioca al
-            meglio dei 5: vince chi conquista tre set.
-
-    comment "Diagnostica"
-
-    config PADEL_GPIO_SCAN
-        bool "Sorveglia i piedini esposti (diagnostica)"
-        default y
-        help
-            Ogni secondo scrive sul monitor seriale lo stato di tutti i piedini
-            che la scheda porta fuori, e una riga a parte ogni volta che uno
-            cambia.
-
-            Serve a capire se un piedino arriva davvero al chip: lo si mette a
-            massa e si guarda se il log se ne accorge. Se il log non se ne
-            accorge, il problema non e' il programma: e' il filo, o il piedino
-            sbagliato.
-
-            Costa una riga di log al secondo: va bene per cercare un difetto,
-            non per lasciarla accesa sempre.
-
-
-    config PADEL_LOG_EVENTS
-        bool "Stampa gli eventi del pulsante"
-        default n
-        help
-            Per ogni gesto riconosciuto scrive sul monitor seriale quale azione
-            e' stata eseguita. Serve a controllare il comportamento del
-            pulsante senza guardare lo schermo.
-
-    config PADEL_LOG_REDRAW
-        bool "Stampa quante zone vengono ridisegnate a ogni punto"
-        default n
-        help
-            Mostra, a ogni aggiornamento, quante aree sono state riscritte e
-            quanti pixel. Serve a verificare che l'aggiornamento a zone
-            funzioni: durante il gioco devono comparire numeri piccoli, attorno
-            ai diciassettemila pixel, non cinquantacinquemila.
-
-    config PADEL_DEBUG_INVARIANTS
-        bool "Verifica la coerenza dello stato dopo ogni punto"
-        default n
-        help
-            Dopo ogni modifica del punteggio controlla che lo stato della
-            partita sia coerente e, se non lo e', se ne lamenta sul monitor
-            seriale. Costa un po' di tempo per punto: va bene per cercare un
-            difetto, non per giocare sempre.
+config WEARABLE_PAIRING_WINDOW_MS
+    int "Pairing window (ms)"
+    default 120000
 
 endmenu
