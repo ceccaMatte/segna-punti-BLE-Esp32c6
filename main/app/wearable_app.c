@@ -3,6 +3,8 @@
 #include "ble_manager.h"
 #include "button_manager.h"
 #include "config_store.h"
+#include "config_runtime.h"
+#include "config_ap.h"
 #include "gesture_engine.h"
 #include "power_manager.h"
 #include "sound_manager.h"
@@ -15,6 +17,22 @@ static const char *TAG = "wearable_app";
 
 static wearable_config_t s_config;
 static wearable_match_state_t s_match_state;
+
+static void on_config_changed(const wearable_config_t *config, void *ctx)
+{
+    (void)ctx;
+
+    if (config == NULL) {
+        return;
+    }
+
+    ESP_LOGI(TAG,
+             "runtime config updated mappings=%u",
+             (unsigned)config->mapping_count);
+    gesture_engine_update_config(config);
+    button_manager_update_config(config);
+    sound_manager_update_config(config);
+}
 
 static void on_ack(wearable_action_t action,
                    const wearable_ack_packet_t *ack,
@@ -70,13 +88,7 @@ static void on_ble_event(ble_app_event_t event, void *ctx)
         break;
 
     case BLE_APP_CONFIG_CHANGED:
-        /*
-         * ble_manager persisted and published s_config before emitting this
-         * event, so do not perform another NVS read in the BLE callback path.
-         */
-        gesture_engine_update_config(&s_config);
-        button_manager_update_config(&s_config);
-        sound_manager_update_config(&s_config);
+        /* Config changes are published centrally by config_runtime. */
         break;
 
     case BLE_APP_CONNECTED:
@@ -155,6 +167,13 @@ esp_err_t wearable_app_start(void)
         ESP_LOGI(TAG, "default configuration created");
     }
 
+    err = config_runtime_init(&s_config,
+                              on_config_changed,
+                              NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
+
     err = sound_manager_start(&s_config);
     if (err != ESP_OK) {
         return err;
@@ -190,6 +209,18 @@ esp_err_t wearable_app_start(void)
                             NULL);
     if (err != ESP_OK) {
         return err;
+    }
+
+    /*
+     * Wi-Fi SoftAP and BLE intentionally run together. The AP is open by
+     * product requirement and serves only the local configuration UI/API.
+     * Failure to start it must not break gameplay input/BLE.
+     */
+    err = config_ap_start();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG,
+                 "configuration SoftAP unavailable: %s",
+                 esp_err_to_name(err));
     }
 
     err = button_manager_start(&s_config,

@@ -6,10 +6,12 @@ idf_component_register(
         "input/button_manager.c"
         "input/gesture_engine.c"
         "storage/config_store.c"
+        "storage/config_runtime.c"
         "feedback/sound_manager.c"
         "power/power_manager.c"
         "link/wearable_protocol.c"
         "link/ble_manager.c"
+        "web/config_ap.c"
     INCLUDE_DIRS
         "."
         "app"
@@ -19,6 +21,7 @@ idf_component_register(
         "feedback"
         "power"
         "link"
+        "web"
     REQUIRES
         bt
         nvs_flash
@@ -26,4 +29,11 @@ idf_component_register(
         esp_driver_ledc
         esp_adc
         esp_timer
+        esp_wifi
+        esp_http_server
+        esp_event
+        esp_netif
+    EMBED_TXTFILES
+        "web/config_ap_page.html"
+        "web/config_ap_app.js"
 )

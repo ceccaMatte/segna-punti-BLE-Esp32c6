@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "config_store.h"
+#include "config_runtime.h"
 #include "power_manager.h"
 
 #include "esp_log.h"
@@ -67,7 +68,6 @@ static const ble_uuid128_t CONFIG_UUID =
     BLE_UUID128_INIT(0x6b,0x6d,0x79,0x61,0x6c,0x70,0x30,0xae,
                      0x6e,0x4b,0x65,0x6f,0x06,0x00,0xd1,0xc4);
 
-static wearable_config_t *s_config;
 static ble_ack_cb_t s_ack_cb;
 static ble_app_event_cb_t s_event_cb;
 static void *s_cb_ctx;
@@ -428,9 +428,14 @@ static int handle_config_access(struct ble_gatt_access_ctxt *ctxt)
     }
 
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
+        wearable_config_t config_snapshot;
+        if (!config_runtime_snapshot(&config_snapshot)) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+
         uint8_t snapshot[WEARABLE_CONFIG_MAX_WIRE_SIZE];
         const size_t size =
-            wearable_encode_config(s_config,
+            wearable_encode_config(&config_snapshot,
                                    snapshot,
                                    sizeof(snapshot));
         if (size == 0u) {
@@ -459,27 +464,18 @@ static int handle_config_access(struct ble_gatt_access_ctxt *ctxt)
             return BLE_ATT_ERR_UNLIKELY;
         }
 
-        wearable_config_t next = *s_config;
-        if (!wearable_apply_config_command(&next, command, len)) {
+        const esp_err_t err =
+            config_runtime_apply_command(command, len);
+        if (err == ESP_ERR_INVALID_ARG) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+        if (err != ESP_OK) {
             return BLE_ATT_ERR_UNLIKELY;
         }
 
-        /*
-         * Persist first, publish second. A reset immediately after a successful
-         * GATT write must never restore the previous configuration.
-         */
-        if (!config_store_save(&next)) {
-            return BLE_ATT_ERR_UNLIKELY;
-        }
-
-        *s_config = next;
         ESP_LOGI(TAG,
-                 "config persisted mappings=%u multi=%u long=%u sequence=%u chord=%u",
-                 (unsigned)s_config->mapping_count,
-                 (unsigned)s_config->multi_click_gap_ms,
-                 (unsigned)s_config->long_press_ms,
-                 (unsigned)s_config->sequence_gap_ms,
-                 (unsigned)s_config->chord_window_ms);
+                 "config command committed via BLE opcode=0x%02x",
+                 (unsigned)command[0]);
         app_event(BLE_APP_CONFIG_CHANGED);
         return 0;
     }
@@ -768,7 +764,6 @@ esp_err_t ble_manager_start(wearable_config_t *config,
         return ESP_ERR_INVALID_ARG;
     }
 
-    s_config = config;
     s_ack_cb = ack_cb;
     s_event_cb = event_cb;
     s_cb_ctx = ctx;

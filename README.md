@@ -19,6 +19,9 @@ padel. Il punteggio autorevole vive nell'applicazione Playmaker.
 - gestione MCP73831 STAT via ADC
 - logging seriale strutturato tramite ESP-IDF e diagnostica lato browser in
   `console.debug` / `console.error`
+- SoftAP Wi-Fi locale **aperta, senza password**, SSID
+  `wearable_config_eps32_c3`, con pagina di configurazione su
+  `http://192.168.4.1/`
 - struttura pronta per low-power / wake da pulsante
 
 ## Regola fondamentale del punteggio
@@ -117,3 +120,22 @@ gesture di pairing, serializzazione config, ACTION, ACK v3 e timing chord.
 
 La build completa ESP-IDF va comunque eseguita prima del flash sulla scheda,
 perché BLE/ADC/GPIO dipendono dalla versione di ESP-IDF installata.
+
+
+## SoftAP di configurazione
+
+Il firmware avvia a boot una rete Wi-Fi SoftAP con:
+
+```text
+SSID: wearable_config_eps32_c3
+Password: nessuna
+URL: http://192.168.4.1/
+```
+
+BLE e Wi-Fi restano attivi contemporaneamente. La pagina SoftAP modifica la
+stessa configurazione runtime/NVS usata da BLE; le due interfacce passano da un
+unico `config_runtime` con mutex, validazione e commit NVS prima della
+pubblicazione.
+
+La rete è volutamente aperta: chiunque sia nel raggio radio e si colleghi può
+modificare la configurazione del wearable.

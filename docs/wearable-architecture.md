@@ -8,6 +8,9 @@ Firmware dedicato al wearable Playmaker. Stack: ESP-IDF + NimBLE.
 - **gesture_engine**: sequenze configurabili con risoluzione dei prefissi.
 - **config_model**: default e validazione indipendenti da ESP-IDF.
 - **config_store**: persistenza NVS.
+- **config_runtime**: owner sincronizzato della configurazione condivisa da BLE
+  e SoftAP; valida, salva in NVS e poi pubblica il nuovo stato.
+- **config_ap**: SoftAP Wi-Fi aperta + HTTP server locale per la configurazione.
 - **ble_manager**: GATT, commissioning, coda, retry e ACK idempotenti.
 - **wearable_protocol**: protocollo binario indipendente dal trasporto.
 - **sound_manager**: owner unico del buzzer.
@@ -116,3 +119,24 @@ il wearable.
 - TEMPORARY_ERROR conserva stesso ID;
 - sound feedback ACTION + GAME/SET/MATCH atomico;
 - parametri runtime protetti tra task/callback.
+
+
+## SoftAP locale
+
+All'avvio viene creata una rete:
+
+```text
+SSID: wearable_config_eps32_c3
+auth: OPEN
+IP ESP32-C3: 192.168.4.1
+HTTP: http://192.168.4.1/
+```
+
+La pagina usa `GET /api/config` per leggere il pacchetto config v3 e
+`POST /api/config` per inviare gli stessi comandi binari usati dalla
+caratteristica BLE CONFIG. `GET /api/status` espone solo stato diagnostico
+essenziale. I dettagli rimangono nella console browser con prefisso
+`[Playmaker][AP]`.
+
+Wi-Fi e BLE possono essere attivi nello stesso momento; la configurazione è
+serializzata da `config_runtime` per evitare race tra scritture HTTP e GATT.
