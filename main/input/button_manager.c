@@ -86,8 +86,8 @@ static void emit_token(wearable_token_t token)
         ESP_LOGI(TAG,
                  "emit primitive=%s mask=0x%02x token=0x%04x",
                  primitive_name(wearable_token_primitive(token)),
-                 wearable_token_button_mask(token),
-                 token);
+                 (unsigned)wearable_token_button_mask(token),
+                 (unsigned)token);
         s_cb(token, s_cb_ctx);
     }
 }
@@ -116,7 +116,7 @@ static void chord_candidate_add(uint8_t button,
     s_chord_candidate_mask |= bit;
     ESP_LOGD(TAG,
              "chord candidate mask=0x%02x",
-             s_chord_candidate_mask);
+             (unsigned)s_chord_candidate_mask);
 }
 
 static void chord_candidate_remove(uint8_t button)
@@ -165,7 +165,7 @@ static void finalize_chord_if_due(uint32_t now)
 
     ESP_LOGI(TAG,
              "chord recognized mask=0x%02x",
-             mask);
+             (unsigned)mask);
     emit_token(wearable_token_from_mask(mask,
                                         WEARABLE_PRIMITIVE_CHORD));
 }
