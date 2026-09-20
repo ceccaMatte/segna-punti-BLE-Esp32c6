@@ -100,15 +100,24 @@ async function authenticateOrClaim(allowClaim) {
 
   if (s.commissioned) {
     if (!t) {
+      suppressReconnect = true;
+      if (device?.gatt?.connected) device.gatt.disconnect();
       throw new Error('Questo wearable è già associato. Avvia la gesture di pairing per sostituire l’associazione.');
     }
-    await writeChar(chars.control, controlPacket(0x02, t));
+    try {
+      await writeChar(chars.control, controlPacket(0x02, t));
+    } catch (e) {
+      suppressReconnect = true;
+      if (device?.gatt?.connected) device.gatt.disconnect();
+      throw new Error('Token di associazione rifiutato: avvia il pairing fisico sul wearable.');
+    }
   } else {
     if (!s.pairingOpen) {
       throw new Error('Finestra di pairing chiusa. Esegui la gesture di pairing sul wearable.');
     }
     if (!allowClaim) {
       suppressReconnect = true;
+      if (device?.gatt?.connected) device.gatt.disconnect();
       throw new Error('Wearable in pairing: usa Connetti / Pair per autorizzare una nuova associazione.');
     }
     if (!t) {
@@ -167,6 +176,7 @@ async function findGrantedDevice() {
 }
 
 async function autoReconnect() {
+  if (suppressReconnect) return false;
   try {
     const d = device ?? await findGrantedDevice();
     if (!d) {
@@ -337,7 +347,7 @@ function render() {
       <strong>${ACTIONS[idx]}</strong>
       <label>Hz <input data-sound="${idx}" data-field="frequency" type="number" min="100" max="8000" value="${s.frequency}"></label>
       <label>Duty ‰ <input data-sound="${idx}" data-field="duty" type="number" min="0" max="900" value="${s.duty}"></label>
-      <label>Durata ms <input data-sound="${idx}" data-field="duration" type="number" min="0" max="2000" value="${s.duration}"></label>
+      <label>Durata ms <input data-sound="${idx}" data-field="duration" type="number" min="1" max="2000" value="${s.duration}"></label>
       <button data-save-sound="${idx}">Salva suono</button>
     </div>
   `).join('');
@@ -392,7 +402,10 @@ $('connect').onclick = async () => {
   try { await requestConnect(); }
   catch (e) { status(e.message || String(e), false); }
 };
-$('auto').onclick = () => autoReconnect();
+$('auto').onclick = () => {
+  suppressReconnect = false;
+  void autoReconnect();
+};
 
 $('saveTiming').onclick = async () => {
   try {
