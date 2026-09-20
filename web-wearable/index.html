@@ -3,60 +3,78 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Playmaker Wearable Config</title>
+  <meta name="theme-color" content="#0b0d10">
+  <title>Playmaker · Scoreboard BLE</title>
   <style>
-    body{font-family:system-ui,sans-serif;max-width:1050px;margin:32px auto;padding:0 16px;background:#f5f5f7;color:#151515}
-    .card{background:white;border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 1px 8px #0001}
-    button,input,select{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid #ccc}
-    button{cursor:pointer}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
-    .mapping{border-top:1px solid #eee;padding-top:12px;margin-top:12px}
-    .step{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .chord{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 8px;border:1px solid #ddd;border-radius:10px}
-    .chord label{display:inline-flex;gap:4px;align-items:center}
-    .chord input{padding:0}
-    .ok{color:#087f23}.bad{color:#b00020}
-    .hint{color:#666;font-size:.92rem}
+    :root{--bg:#f3f4f6;--card:#fff;--ink:#0f1115;--muted:#71757d;--line:#e5e7eb;--dark:#111318;--green:#22c55e;--red:#dc2626;--shadow:0 14px 40px #11182712}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+    .shell{max-width:980px;margin:auto;padding:22px 16px 56px}
+    .top{background:#0b0d10;color:white;border-radius:28px;padding:22px;box-shadow:0 16px 40px #0002}
+    .eyebrow{font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:800}
+    h1{margin:7px 0 4px;font-size:clamp(1.8rem,5vw,2.7rem);letter-spacing:-.04em}.sub{margin:0;color:#b7bbc3}
+    .blebar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px}.pill{border:1px solid #ffffff18;background:#ffffff10;border-radius:999px;padding:8px 11px;font-size:.87rem}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#7b7f87;margin-right:6px}.dot.ok{background:#35dc87}.dot.bad{background:#ff6572}
+    button{font:inherit;border:0;border-radius:13px;padding:10px 14px;font-weight:800;cursor:pointer}.primary{background:#fff;color:#111}.secondary{background:#24272d;color:#fff}.danger{background:#feecef;color:#b42332}.ghost{background:#f1f2f4;color:#111}
+    .card{background:white;border:1px solid #fff;border-radius:25px;padding:20px;margin-top:16px;box-shadow:var(--shadow)}
+    .score-head{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}.team{text-align:center}.team-name{font-weight:850;font-size:1.05rem}.sets{font-size:2.2rem;font-weight:900}.divider{font-size:1.4rem;color:#b1b4ba}
+    .games{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px}.gamebox{background:#f7f7f8;border-radius:18px;padding:15px;text-align:center}.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:800}.value{font-size:2rem;font-weight:900;margin-top:2px}
+    .points{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.point{border:1px solid var(--line);border-radius:20px;padding:18px;text-align:center}.point .value{font-size:3rem}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.score-btn{padding:16px;font-size:1.05rem;background:#111318;color:#fff}.undo-btn{grid-column:1/-1;background:#eef0f2;color:#111}
+    .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.section-title{font-weight:900;font-size:1.15rem;margin:0 0 4px}.hint{color:var(--muted);font-size:.9rem;margin:0 0 14px;line-height:1.4}
+    .status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.mini{background:#f7f7f8;border-radius:15px;padding:12px}.mini strong{display:block;font-size:.86rem}.mini span{font-size:.8rem;color:var(--muted)}
+    .event{margin-top:12px;background:#0f1115;color:#fff;border-radius:16px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.82rem;min-height:46px}
+    @media(max-width:620px){.shell{padding:10px 10px 44px}.top,.card{border-radius:21px}.status-grid{grid-template-columns:1fr}.score-head{grid-template-columns:1fr auto 1fr}.point .value{font-size:2.5rem}}
   </style>
 </head>
 <body>
-  <h1>Playmaker Wearable</h1>
-
-  <div class="card">
-    <div class="row">
-      <button id="connect">Connetti / Pair</button>
-      <button id="auto">Riconnetti</button>
-      <span id="status">Non connesso</span>
+<main class="shell">
+  <section class="top">
+    <div class="eyebrow">Playmaker · BLE test app</div>
+    <h1>Padel scoreboard</h1>
+    <p class="sub">La pagina è l'autorità del punteggio e risponde agli ACTION del wearable con ACK reali.</p>
+    <div class="blebar">
+      <span class="pill"><span id="bleDot" class="dot"></span><span id="bleStatus">Non connesso</span></span>
+      <button id="connect" class="primary">Connetti / Pair</button>
+      <button id="auto" class="secondary">Riconnetti</button>
     </div>
-    <div class="hint">La diagnostica resta nella console del browser; l'interfaccia mostra solo la configurazione.</div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>Timing gesture</h2>
-    <div class="row">
-      <label>Sequenza <input id="seqGap" type="number" min="100" max="1500"> ms</label>
-      <label>Multi-click <input id="multiGap" type="number" min="120" max="1000"> ms</label>
-      <label>Long press <input id="longMs" type="number" min="400" max="5000"> ms</label>
-      <label>Simultanea <input id="chordMs" type="number" min="25" max="250"> ms</label>
-      <button id="saveTiming">Salva timing</button>
+  <section class="card">
+    <div class="score-head">
+      <div class="team"><div class="team-name">Squadra A</div><div id="setsA" class="sets">0</div><div class="label">set</div></div>
+      <div class="divider">—</div>
+      <div class="team"><div class="team-name">Squadra B</div><div id="setsB" class="sets">0</div><div class="label">set</div></div>
     </div>
-  </div>
+    <div class="games">
+      <div class="gamebox"><div class="label">Game A</div><div id="gamesA" class="value">0</div></div>
+      <div class="gamebox"><div class="label">Game B</div><div id="gamesB" class="value">0</div></div>
+    </div>
+    <div class="points">
+      <div class="point"><div class="label">Punti A</div><div id="pointsA" class="value">0</div></div>
+      <div class="point"><div class="label">Punti B</div><div id="pointsB" class="value">0</div></div>
+    </div>
+    <div id="tbLabel" class="hint" style="text-align:center;margin-top:10px;margin-bottom:0;display:none"></div>
+    <div class="actions">
+      <button id="manualA" class="score-btn">+ Punto A</button>
+      <button id="manualB" class="score-btn">+ Punto B</button>
+      <button id="manualUndo" class="undo-btn">↶ Undo</button>
+    </div>
+  </section>
 
-  <div class="card">
-    <h2>Gesture → azione</h2>
-    <div id="mappings"></div>
-    <button id="addMapping">Aggiungi gesture</button>
-  </div>
-
-  <div class="card">
-    <h2>Suoni azioni</h2>
-    <div id="sounds"></div>
-  </div>
-
-  <div class="card">
-    <button id="defaults">Ripristina configurazione di default</button>
-  </div>
-
-  <script type="module" src="./app.js"></script>
+  <section class="card">
+    <h2 class="section-title">BLE / Pairing</h2>
+    <p class="hint">Per un wearable già associato, usa la gesture fisica Pairing prima di collegare un nuovo browser. Il token viene salvato nel localStorage del browser.</p>
+    <div class="status-grid">
+      <div class="mini"><strong>Commissioned</strong><span id="commissioned">—</span></div>
+      <div class="mini"><strong>Authenticated</strong><span id="authenticated">—</span></div>
+      <div class="mini"><strong>Pairing window</strong><span id="pairingOpen">—</span></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="resetMatch" class="ghost">Nuova partita</button>
+      <button id="clearBrowserToken" class="danger">Dimentica token browser</button>
+    </div>
+    <div id="lastEvent" class="event">In attesa…</div>
+  </section>
+</main>
+<script src="./app.js"></script>
 </body>
 </html>
