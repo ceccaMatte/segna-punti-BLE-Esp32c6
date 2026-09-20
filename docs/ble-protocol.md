@@ -90,8 +90,14 @@ Su ACK `OK`:
 3. altrimenti `SET_ENDED`;
 4. altrimenti `GAME_ENDED`.
 
-Su ACK non OK viene riprodotto il suono di errore e il comando non viene
-considerato confermato.
+Su `REJECTED` il comando è terminale: viene rimosso dalla coda e il wearable
+riproduce il suono di errore.
+
+Su `TEMPORARY_ERROR` il comando **resta in coda con lo stesso
+`session_id + sequence`** e viene ritentato. Il wearable non crea un nuovo ID,
+quindi un problema temporaneo non può trasformarsi in un doppio punto. Dopo un
+numero massimo di tentativi il comando viene abbandonato e viene emesso il
+feedback di errore.
 
 ## Pagina web-wearable
 
