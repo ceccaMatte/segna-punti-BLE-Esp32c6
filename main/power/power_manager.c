@@ -180,6 +180,8 @@ static void power_task(void *arg)
 
 esp_err_t power_manager_start(power_event_cb_t cb, void *ctx)
 {
+    esp_err_t err = ESP_OK;
+
     s_cb = cb;
     s_ctx = ctx;
 
@@ -189,7 +191,7 @@ esp_err_t power_manager_start(power_event_cb_t cb, void *ctx)
         .mode = GPIO_MODE_OUTPUT,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    esp_err_t err = gpio_config(&led);
+    err = gpio_config(&led);
     if (err != ESP_OK) {
         return err;
     }
@@ -202,7 +204,7 @@ esp_err_t power_manager_start(power_event_cb_t cb, void *ctx)
         .pull_down_en = GPIO_PULLDOWN_ENABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    esp_err_t err = gpio_config(&vbus);
+    err = gpio_config(&vbus);
     if (err != ESP_OK) {
         return err;
     }
@@ -212,7 +214,7 @@ esp_err_t power_manager_start(power_event_cb_t cb, void *ctx)
         .unit_id = ADC_UNIT_1,
     };
 
-    esp_err_t err = adc_oneshot_new_unit(&unit_cfg, &s_adc);
+    err = adc_oneshot_new_unit(&unit_cfg, &s_adc);
     if (err != ESP_OK) {
         return err;
     }
