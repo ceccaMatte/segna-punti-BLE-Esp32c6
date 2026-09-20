@@ -31,9 +31,13 @@ GPIO2, GPIO8 e GPIO9 sono strapping pin dell'ESP32-C3 e non vengono usati dal we
 
 GPIO20 coincide con U0RXD sull'ESP32-C3. Per evitare che il buzzer condivida il pin con la console UART0, il branch imposta la console di sviluppo su USB Serial/JTAG.
 
-Il segnale `battery_state` arriva a GPIO4, ma dallo schema ricevuto non si vede la rete che genera quel segnale. La misura batteria resta quindi disabilitata di default finche' non viene confermato se e' analogico e, in caso affermativo, il rapporto del partitore. Non viene inventata una conversione tensione-batteria.
+`battery_state` non e' la tensione della batteria: e' MCP73831 STAT portato a GPIO4 / ADC1_CH4 attraverso R10=100 kΩ e R11=100 kΩ. Il firmware lo legge in analogico. Con VDD caricatore a 5 V, STAT HIGH produce circa 2.5 V sul GPIO; STAT LOW produce circa 0 V.
 
-I segnali del LED di carica / CHRG / power-present non sono presenti nello schema ricevuto e restano disabilitati finche' non viene fornita quella parte del circuito.
+Per MCP73831 STAT e' LOW durante la carica, HIGH a carica completata e High-Z quando il caricatore non e' alimentato. Con R11 verso massa, High-Z torna circa 0 V. Di conseguenza il solo `battery_state` distingue bene "carica completa" da "non completa", ma LOW e' ambiguo fra "sta caricando" e "USB/5V assente".
+
+Per far lampeggiare un LED *solo* durante la carica serve quindi anche un segnale VBUS/+5V-present (oppure un LED alimentato direttamente dal ramo +5V con una topologia hardware adatta). Il relativo GPIO e il GPIO del LED restano disabilitati finche' non vengono definiti nello schema.
+
+Analogamente, `battery_state` non permette di sapere quando la LiPo si sta scaricando sotto una soglia. Il beep di batteria scarica richiede una misura separata di Vbat tramite partitore su un ADC. Il firmware non usa STAT come falsa misura della batteria.
 
 ## Semantica ACK
 
