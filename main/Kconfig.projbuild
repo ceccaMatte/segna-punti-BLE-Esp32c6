@@ -1,24 +1,24 @@
 menu "Playmaker wearable"
 
-config WEARABLE_BUTTON_1_GPIO
-    int "Button 1 GPIO"
-    default 4
-config WEARABLE_BUTTON_2_GPIO
-    int "Button 2 GPIO"
+config WEARABLE_BUTTON_A_GPIO
+    int "Physical A button GPIO"
+    default 3
+config WEARABLE_BUTTON_B_GPIO
+    int "Physical B button GPIO"
+    default 1
+config WEARABLE_BUTTON_MOMENT_GPIO
+    int "Physical Moment button GPIO"
+    default 0
+config WEARABLE_BUTTON_UNDO_GPIO
+    int "Physical Undo button GPIO"
     default 5
-config WEARABLE_BUTTON_3_GPIO
-    int "Button 3 GPIO"
-    default 6
-config WEARABLE_BUTTON_4_GPIO
-    int "Button 4 GPIO"
-    default 7
 config WEARABLE_BUTTON_ACTIVE_LOW
     bool "Buttons are active low"
     default y
 
 config WEARABLE_BUZZER_GPIO
     int "Passive buzzer GPIO"
-    default 10
+    default 20
 
 config WEARABLE_CHARGE_LED_GPIO
     int "Charge status LED GPIO (-1 disables)"
@@ -37,12 +37,17 @@ config WEARABLE_POWER_PRESENT_ACTIVE_HIGH
     default y
 
 config WEARABLE_BATTERY_ADC_CHANNEL
-    int "ADC1 channel for battery divider (-1 disables)"
+    int "ADC1 channel used by battery_state (-1 disables measurement)"
     range -1 4
     default -1
+    help
+        The provided schematic routes battery_state to GPIO4, i.e. ADC1_CH4.
+        Keep this disabled until the voltage-divider / source scaling of
+        battery_state is confirmed.
+
 config WEARABLE_BATTERY_DIVIDER_NUM
     int "Battery divider numerator"
-    default 2
+    default 1
 config WEARABLE_BATTERY_DIVIDER_DEN
     int "Battery divider denominator"
     default 1
