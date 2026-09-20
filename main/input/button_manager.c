@@ -83,7 +83,7 @@ static bool is_pressed(int gpio)
 static void emit_token(wearable_token_t token)
 {
     if (s_cb != NULL) {
-        ESP_LOGD(TAG,
+        ESP_LOGI(TAG,
                  "emit primitive=%s mask=0x%02x token=0x%04x",
                  primitive_name(wearable_token_primitive(token)),
                  wearable_token_button_mask(token),
