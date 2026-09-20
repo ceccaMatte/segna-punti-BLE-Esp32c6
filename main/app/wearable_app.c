@@ -160,13 +160,6 @@ esp_err_t wearable_app_start(void)
         return err;
     }
 
-    err = button_manager_start(&s_config,
-                               on_primitive,
-                               NULL);
-    if (err != ESP_OK) {
-        return err;
-    }
-
     /*
      * Power monitoring is useful but not required for scoring. If the ADC
      * peripheral cannot start, keep the wearable operational and surface the
@@ -179,10 +172,22 @@ esp_err_t wearable_app_start(void)
                  esp_err_to_name(err));
     }
 
+    /*
+     * Bring the BLE state machine up before exposing physical input. This
+     * prevents a button held during boot from reaching an uninitialized link
+     * manager.
+     */
     err = ble_manager_start(&s_config,
                             on_ack,
                             on_ble_event,
                             NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = button_manager_start(&s_config,
+                               on_primitive,
+                               NULL);
     if (err != ESP_OK) {
         return err;
     }
