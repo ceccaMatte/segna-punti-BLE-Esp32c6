@@ -65,3 +65,19 @@ Il vecchio codice ESP32-C6 relativo a display, motore punteggio, UI e scoreboard
 
 Vedi `docs/wearable-architecture.md` per i dettagli hardware e
 `docs/ble-protocol.md` per il contratto con l'app.
+
+
+## Verifica rapida
+
+La parte pura del firmware (modello configurazione + protocollo binario) ha test
+host-side che non richiedono ESP-IDF:
+
+```sh
+./test/host/run.sh
+```
+
+I test coprono configurazione di default, validazione delle gesture, protezione
+della gesture di pairing, encoding ACTION e decoding ACK v2.
+
+La build completa ESP-IDF va comunque eseguita prima del flash sulla scheda,
+perché i moduli BLE/ADC/GPIO dipendono dalla versione di ESP-IDF installata.
