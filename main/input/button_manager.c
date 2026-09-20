@@ -18,11 +18,22 @@ typedef struct {
     uint8_t click_count;
 } button_state_t;
 
+/*
+ * Logical button indices are intentionally stable because they are serialized
+ * inside gesture tokens:
+ *   0 = physical A button
+ *   1 = physical B button
+ *   2 = physical Moment button
+ *   3 = physical Undo button
+ *
+ * The action mapping is still fully configurable; these names only identify
+ * the physical keys printed on the enclosure / PCB.
+ */
 static const int s_pins[WEARABLE_BUTTON_COUNT] = {
-    CONFIG_WEARABLE_BUTTON_1_GPIO,
-    CONFIG_WEARABLE_BUTTON_2_GPIO,
-    CONFIG_WEARABLE_BUTTON_3_GPIO,
-    CONFIG_WEARABLE_BUTTON_4_GPIO,
+    CONFIG_WEARABLE_BUTTON_A_GPIO,
+    CONFIG_WEARABLE_BUTTON_B_GPIO,
+    CONFIG_WEARABLE_BUTTON_MOMENT_GPIO,
+    CONFIG_WEARABLE_BUTTON_UNDO_GPIO,
 };
 
 static button_state_t s_state[WEARABLE_BUTTON_COUNT];
