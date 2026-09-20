@@ -17,13 +17,13 @@
 static const char *TAG = "config_ap";
 
 extern const unsigned char config_ap_page_html_start[]
-    asm("_binary_web_config_ap_page_html_start");
+    asm("_binary_config_ap_page_html_start");
 extern const unsigned char config_ap_page_html_end[]
-    asm("_binary_web_config_ap_page_html_end");
+    asm("_binary_config_ap_page_html_end");
 extern const unsigned char config_ap_app_js_start[]
-    asm("_binary_web_config_ap_app_js_start");
+    asm("_binary_config_ap_app_js_start");
 extern const unsigned char config_ap_app_js_end[]
-    asm("_binary_web_config_ap_app_js_end");
+    asm("_binary_config_ap_app_js_end");
 
 static httpd_handle_t s_httpd;
 static esp_netif_t *s_ap_netif;
