@@ -71,3 +71,26 @@ La characteristic CONFIG supporta comandi piccoli, adatti a Web Bluetooth:
 - `0x14`: reset defaults
 
 La lettura della characteristic restituisce l'intera configurazione in formato binario versionato.
+
+
+## Robustezza firmware
+
+Il refactoring separa il modello di configurazione dalla persistenza NVS:
+`core/config_model` contiene default e validazione, mentre `storage/config_store`
+si occupa soltanto della memoria permanente. In questo modo protocollo e logica
+di configurazione restano testabili su PC senza ESP-IDF.
+
+Le primitive dei pulsanti e il Gesture Engine proteggono con sezioni critiche i
+parametri modificabili dalla pagina web, evitando race fra task input, timer e
+callback BLE.
+
+La coda BLE ha dimensione limitata, retry con backoff e massimo numero di
+tentativi. `TEMPORARY_ERROR` non rimuove il comando; `OK` e `REJECTED` sono
+terminali. Il feedback ACTION + GAME/SET/MATCH viene inserito nel Sound Manager
+come un unico pattern, così la melodia di fine game non può essere separata dal
+beep di conferma dello stesso ACK.
+
+Quando viene avviato un nuovo pairing, il firmware notifica il vecchio client
+prima di disconnetterlo. La pagina di configurazione sospende l'auto-reconnect e
+non può reclamare automaticamente il wearable: una nuova associazione richiede
+esplicitamente il pulsante **Connetti / Pair**.
