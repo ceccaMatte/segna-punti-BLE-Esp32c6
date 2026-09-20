@@ -94,7 +94,7 @@ function onStatusNotification(ev) {
   }
 }
 
-async function authenticateOrClaim() {
+async function authenticateOrClaim(allowClaim) {
   const s = await readStatus();
   let t = loadToken();
 
@@ -106,6 +106,10 @@ async function authenticateOrClaim() {
   } else {
     if (!s.pairingOpen) {
       throw new Error('Finestra di pairing chiusa. Esegui la gesture di pairing sul wearable.');
+    }
+    if (!allowClaim) {
+      suppressReconnect = true;
+      throw new Error('Wearable in pairing: usa Connetti / Pair per autorizzare una nuova associazione.');
     }
     if (!t) {
       t = randomToken();
@@ -119,7 +123,7 @@ async function authenticateOrClaim() {
   suppressReconnect = false;
 }
 
-async function connectDevice(d) {
+async function connectDevice(d, { allowClaim = false } = {}) {
   clearTimeout(reconnectTimer);
   device = d;
   device.removeEventListener('gattserverdisconnected', onDisconnected);
@@ -142,7 +146,7 @@ async function connectDevice(d) {
   await chars.action.startNotifications();
   chars.action.addEventListener('characteristicvaluechanged', onAction);
 
-  await authenticateOrClaim();
+  await authenticateOrClaim(allowClaim);
   reconnectAttempt = 0;
   status(`Connesso a ${device.name}`);
   await refreshConfig();
@@ -153,7 +157,7 @@ async function requestConnect() {
   const d = await navigator.bluetooth.requestDevice({
     filters: [{ services: [SERVICE] }],
   });
-  await connectDevice(d);
+  await connectDevice(d, { allowClaim: true });
 }
 
 async function findGrantedDevice() {
@@ -169,7 +173,7 @@ async function autoReconnect() {
       status('Nessun wearable già autorizzato dal browser', false);
       return false;
     }
-    await connectDevice(d);
+    await connectDevice(d, { allowClaim: false });
     return true;
   } catch (e) {
     status(e.message || String(e), false);
