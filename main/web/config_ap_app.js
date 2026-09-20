@@ -123,12 +123,17 @@ function render() {
   $('seqGap').value=config.seqGap; $('multiGap').value=config.multiGap;
   $('longMs').value=config.longMs; $('simultaneousMs').value=config.simultaneousMs;
 
+  const pairingCount = config.mappings.filter(m => m.action === 4).length;
   $('mappings').innerHTML = config.mappings.length ? config.mappings.map((m,i)=>{
     const summary=m.seq.map(stepLabel).join(' → ');
+    const protectsPairing = m.action === 4 && pairingCount === 1;
     return `<div class="mapping">
       <div class="mapping-head"><div><div class="mapping-title">Gesture ${i+1}</div>
       <div class="mapping-summary">${summary} → ${ACTIONS[m.action]}</div></div>
-      <button class="danger" data-delete-map="${i}">Elimina</button></div>
+      ${protectsPairing
+        ? '<span class="mapping-summary">Pairing obbligatorio</span>'
+        : `<button class="danger" data-delete-map="${i}">Elimina</button>`}
+      </div>
       ${m.seq.map((v,s)=>renderStep(v,i,s)).join('')}
       <div class="mapping-actions">
         <select data-action="${i}">${ACTIONS.map((name,a)=>`<option value="${a}" ${a===m.action?'selected':''}>Azione: ${name}</option>`).join('')}</select>
@@ -153,10 +158,19 @@ function syncMappingFromDom(index) {
   });
 }
 async function saveMapping(index) {
+  const beforeAction = config.mappings[index].action;
   syncMappingFromDom(index);
   const m=config.mappings[index];
   if(!m.seq.length) throw new Error('La gesture deve avere almeno uno step.');
   if(m.seq.some(v=>tokenMask(v)===0)) throw new Error('Ogni step deve avere almeno un pulsante selezionato.');
+
+  const otherPairing = config.mappings.some((mapping, i) =>
+    i !== index && mapping.action === 4);
+  if (beforeAction === 4 && m.action !== 4 && !otherPairing) {
+    m.action = beforeAction;
+    render();
+    throw new Error('Deve esistere sempre almeno una gesture di Pairing. Crea prima la nuova gesture Pairing, poi modifica questa.');
+  }
   const out=new Uint8Array(4+2*MAX_SEQUENCE), dv=new DataView(out.buffer);
   out[0]=0x10; out[1]=index; out[2]=m.action; out[3]=m.seq.length;
   m.seq.forEach((v,s)=>put16(dv,4+s*2,v));
