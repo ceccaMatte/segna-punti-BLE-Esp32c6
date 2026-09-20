@@ -182,8 +182,8 @@ void gesture_engine_feed(wearable_token_t token)
 
     ESP_LOGD(TAG,
              "feed token=0x%04x mask=0x%02x primitive=%u sequence_len=%u",
-             token,
-             wearable_token_button_mask(token),
+             (unsigned)token,
+             (unsigned)wearable_token_button_mask(token),
              (unsigned)wearable_token_primitive(token),
              (unsigned)length);
 
