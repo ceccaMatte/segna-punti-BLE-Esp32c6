@@ -14,6 +14,7 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs.h"
 #include "host/ble_uuid.h"
+#include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "services/gap/ble_svc_gap.h"
@@ -308,16 +309,22 @@ static int gap_event(struct ble_gap_event *event, void *arg);
 
 static void advertise(void)
 {
+    /* 31-byte advertising limit: service UUID in ADV, human-readable name in
+       scan response. Keeping the service UUID in ADV is important because Web
+       Bluetooth filters on it before showing the device. */
     struct ble_hs_adv_fields fields;
     memset(&fields, 0, sizeof(fields));
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (uint8_t *)s_name;
-    fields.name_len = strlen(s_name);
-    fields.name_is_complete = 1;
     fields.uuids128 = (ble_uuid128_t *)&SVC_UUID;
     fields.num_uuids128 = 1;
     fields.uuids128_is_complete = 1;
-    ble_gap_adv_set_fields(&fields);
+    if (ble_gap_adv_set_fields(&fields) != 0) return;
+
+    memset(&fields, 0, sizeof(fields));
+    fields.name = (uint8_t *)s_name;
+    fields.name_len = (uint8_t)strlen(s_name);
+    fields.name_is_complete = 1;
+    if (ble_gap_adv_rsp_set_fields(&fields) != 0) return;
 
     struct ble_gap_adv_params params;
     memset(&params, 0, sizeof(params));
@@ -377,8 +384,14 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
 static void on_sync(void)
 {
+    if (ble_hs_util_ensure_addr(0) != 0) return;
     if (ble_hs_id_infer_auto(0, &s_own_addr_type) != 0) return;
     advertise();
+}
+
+static void on_reset(int reason)
+{
+    (void)reason;
 }
 
 static void host_task(void *param)
@@ -435,12 +448,15 @@ void ble_manager_start(wearable_config_t *config, ble_ack_cb_t ack_cb,
     esp_read_mac(mac, ESP_MAC_BT);
     snprintf(s_name, sizeof(s_name), "PLAYMAKER_%02X%02X", mac[4], mac[5]);
 
-    nimble_port_init();
+    if (nimble_port_init() != ESP_OK) {
+        return;
+    }
+    ble_hs_cfg.sync_cb = on_sync;
+    ble_hs_cfg.reset_cb = on_reset;
+
     ble_svc_gap_init();
     ble_svc_gatt_init();
     ble_svc_gap_device_name_set(s_name);
-
-    ble_hs_cfg.sync_cb = on_sync;
 
     ble_gatts_count_cfg(GATT_SERVICES);
     ble_gatts_add_svcs(GATT_SERVICES);
