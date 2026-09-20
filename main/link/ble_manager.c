@@ -585,8 +585,7 @@ static void advertise(void)
                            &params,
                            gap_event,
                            NULL);
-    if (rc != 0 &&
-        rc != BLE_HS_EALREADY) {
+    if (rc != 0) {
         ESP_LOGE(TAG, "advertising failed: %d", rc);
     }
 }
@@ -863,6 +862,10 @@ bool ble_manager_send_action(wearable_action_t action)
 
 bool ble_manager_enter_pairing(void)
 {
+    if (s_lock == NULL) {
+        return false;
+    }
+
     /*
      * Persistence is the source of truth. If NVS cannot forget the old token,
      * do not pretend that the device entered pairing only in RAM.
