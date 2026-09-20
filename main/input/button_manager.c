@@ -288,7 +288,7 @@ esp_err_t button_manager_start(const wearable_config_t *config,
         gpio_config_t gpio = {
             .pin_bit_mask = 1ULL << s_pins[i],
             .mode = GPIO_MODE_INPUT,
-            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
             .pull_down_en = GPIO_PULLDOWN_DISABLE,
             .intr_type = GPIO_INTR_DISABLE,
         };
