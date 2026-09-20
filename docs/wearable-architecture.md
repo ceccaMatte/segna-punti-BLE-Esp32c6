@@ -12,6 +12,29 @@ Questo branch converte il vecchio segnapunti ESP32-C6 in un firmware dedicato al
 - **sound_manager**: un solo owner del buzzer e coda dei pattern sonori.
 - **power_manager**: batteria, stato di carica e LED.
 
+## Pinout PCB attuale
+
+Pinout derivato dallo schema fornito il 20/09/2026:
+
+| Funzione | ESP32-C3 GPIO | Note |
+| --- | ---: | --- |
+| BTN_A | GPIO3 | ingresso active-low, pull-up esterno 100 kΩ |
+| BTN_B | GPIO1 | ingresso active-low, pull-up esterno 100 kΩ |
+| BTN_Moment | GPIO0 | ingresso active-low, pull-up esterno 100 kΩ |
+| BTN_UNDO | GPIO5 | ingresso active-low, pull-up esterno 100 kΩ |
+| Buzzer | GPIO20 | uscita PWM/LEDC |
+| battery_state | GPIO4 | collegato sul PCB; ADC1_CH4 se il segnale e' analogico |
+| 3V3 | 3V3 | alimentazione logica |
+| +5V | 5V | ingresso 5 V della SuperMini |
+
+GPIO2, GPIO8 e GPIO9 sono strapping pin dell'ESP32-C3 e non vengono usati dal wearable. I quattro tasti sono tutti su GPIO0..5, quindi la piedinatura lascia aperta la possibilita' di usarli come wake source da deep sleep.
+
+GPIO20 coincide con U0RXD sull'ESP32-C3. Per evitare che il buzzer condivida il pin con la console UART0, il branch imposta la console di sviluppo su USB Serial/JTAG.
+
+Il segnale `battery_state` arriva a GPIO4, ma dallo schema ricevuto non si vede la rete che genera quel segnale. La misura batteria resta quindi disabilitata di default finche' non viene confermato se e' analogico e, in caso affermativo, il rapporto del partitore. Non viene inventata una conversione tensione-batteria.
+
+I segnali del LED di carica / CHRG / power-present non sono presenti nello schema ricevuto e restano disabilitati finche' non viene fornita quella parte del circuito.
+
 ## Semantica ACK
 
 Ogni comando inviato dal wearable ha la chiave `(session_id, sequence)`. La web app deve deduplicare su questa coppia e rispondere sempre con lo stesso ACK se riceve un retry. L'ACK contiene anche flag autorevoli `GAME_ENDED`, `SET_ENDED` e `MATCH_ENDED`; il wearable puo' quindi riprodurre una melodia senza conoscere le regole del padel.
@@ -22,12 +45,6 @@ Il pairing applicativo e' separato dal collegamento BLE. Un token casuale da 128
 
 La configurazione e' validata in modo che esista sempre almeno una gesture di pairing, evitando di rendere il dispositivo irrecuperabile.
 
-## Configurazione hardware
-
-I GPIO non sono hard-coded nell'architettura: si impostano da `idf.py menuconfig -> Playmaker wearable`. I valori di default sono solo un punto di partenza e vanno allineati allo schema elettrico reale prima del flash.
-
-Il rilevamento "carica completa" richiede un segnale power-present separato dal segnale CHRG. Se l'hardware non lo espone, lasciare `POWER_PRESENT_GPIO=-1`: il firmware non inventa uno stato FULL.
-
 ## Timing predefiniti
 
 - debounce: 25 ms
@@ -35,7 +52,7 @@ Il rilevamento "carica completa" richiede un segnale power-present separato dal 
 - long press: 1200 ms
 - chiusura sequenza gesture: 300 ms
 - pairing window: 120 s
-- low-battery reminder: 20 s
+- low-battery reminder: 20 s (attivo solo quando la misura batteria sara' configurata)
 
 ## Config BLE
 
