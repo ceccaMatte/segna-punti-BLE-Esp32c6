@@ -231,17 +231,24 @@ static bool send_head_locked(void)
         ble_gatts_notify_custom(s_conn_handle,
                                 s_action_val_handle,
                                 om);
-    if (rc != 0) {
-        ESP_LOGW(TAG,
-                 "action notify failed seq=%lu rc=%d",
-                 (unsigned long)item->packet.sequence,
-                 rc);
-        return false;
-    }
 
+    /*
+     * A failed local notify is still a send attempt for backoff purposes.
+     * Otherwise an ENOMEM / transient host error would be retried every
+     * 100 ms by retry_task and could hammer the BLE host indefinitely.
+     */
     item->last_send_ms = now_ms32();
     if (item->attempts < UINT8_MAX) {
         item->attempts++;
+    }
+
+    if (rc != 0) {
+        ESP_LOGW(TAG,
+                 "action notify failed seq=%lu attempt=%u rc=%d",
+                 (unsigned long)item->packet.sequence,
+                 (unsigned)item->attempts,
+                 rc);
+        return false;
     }
 
     ESP_LOGD(TAG,
