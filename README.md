@@ -43,22 +43,24 @@ Se un punto del wearable chiude il game, l'ACK contiene `GAME_ENDED` e il
 wearable riproduce la melodia di game. Se chiude contemporaneamente un set o il
 match, set/match hanno priorità sonora.
 
-## Gesture simultanee
+## Gesture programmabili
 
-Il Button Manager apre una finestra configurabile (default **60 ms**) quando
-rileva il primo pulsante stabile. Se almeno due pulsanti rimangono premuti entro
-quella finestra genera un singolo token `CHORD` con una bitmask dei pulsanti.
-
-La chord **consuma** le gesture individuali coinvolte: A+B non può generare
-prima `POINT_A` e `POINT_B` e poi `UNDO`.
-
-Il protocollo/configurazione usa token gesture a 16 bit:
+Ogni step è rappresentato da **mask pulsanti + tipo di pressione**. La stessa
+logica vale per uno o più pulsanti:
 
 ```text
-bits 0..3  button mask: A B Moment Undo
-bits 4..6  tipo: click / double / triple / long / chord
-bits 7..15 riservati
+A + CLICK                  -> POINT_A
+A+B + CLICK                -> UNDO
+A+B + DOUBLE               -> POINT_A
+A+B+MOMENT + LONG          -> PAIRING
 ```
+
+La finestra `simultaneous_window_ms` (default 60 ms) indica quanto possono
+essere sfalsati i press iniziali per appartenere allo stesso gruppo. Lo stesso
+gruppo può poi essere classificato come click, doppio, triplo o long press.
+
+Il protocollo usa token a 16 bit: bit 0..3 = mask pulsanti, bit 4..5 = tipo
+(click/double/triple/long). Non esiste più una primitive CHORD separata.
 
 ## Diagnostica
 
@@ -115,7 +117,7 @@ host-side che non richiedono ESP-IDF:
 ./test/host/run.sh
 ```
 
-I test coprono token singoli/chord, configurazione di default, protezione della
+I test coprono token a maschera multi-pulsante, configurazione di default, protezione della
 gesture di pairing, serializzazione config, ACTION, ACK v3 e timing chord.
 
 La build completa ESP-IDF va comunque eseguita prima del flash sulla scheda,

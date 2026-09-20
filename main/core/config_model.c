@@ -22,8 +22,8 @@ void wearable_config_set_defaults(wearable_config_t *out)
     out->multi_click_gap_ms = 300;
     out->long_press_ms = 1200;
     out->sequence_gap_ms = 300;
-    out->chord_window_ms = 60;
-    out->mapping_count = 6;
+    out->simultaneous_window_ms = 60;
+    out->mapping_count = 7;
 
     out->mappings[0] = (wearable_mapping_t){
         .enabled = true,
@@ -49,19 +49,32 @@ void wearable_config_set_defaults(wearable_config_t *out)
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO,
                                         WEARABLE_PRIMITIVE_CLICK)}},
     };
+
+    /* User-requested programmable combination examples. */
     out->mappings[4] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_UNDO,
         .sequence = {1, {wearable_token_from_mask(
             (uint8_t)((1u << WEARABLE_BUTTON_A) |
                       (1u << WEARABLE_BUTTON_B)),
-            WEARABLE_PRIMITIVE_CHORD)}},
+            WEARABLE_PRIMITIVE_CLICK)}},
     };
     out->mappings[5] = (wearable_mapping_t){
         .enabled = true,
+        .action = WEARABLE_ACTION_POINT_A,
+        .sequence = {1, {wearable_token_from_mask(
+            (uint8_t)((1u << WEARABLE_BUTTON_A) |
+                      (1u << WEARABLE_BUTTON_B)),
+            WEARABLE_PRIMITIVE_DOUBLE)}},
+    };
+    out->mappings[6] = (wearable_mapping_t){
+        .enabled = true,
         .action = WEARABLE_ACTION_ENTER_PAIRING,
-        .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO,
-                                        WEARABLE_PRIMITIVE_LONG)}},
+        .sequence = {1, {wearable_token_from_mask(
+            (uint8_t)((1u << WEARABLE_BUTTON_A) |
+                      (1u << WEARABLE_BUTTON_B) |
+                      (1u << WEARABLE_BUTTON_MOMENT)),
+            WEARABLE_PRIMITIVE_LONG)}},
     };
 
     out->action_sounds[WEARABLE_ACTION_POINT_A] =
@@ -86,8 +99,8 @@ bool wearable_config_is_valid(const wearable_config_t *config)
         config->long_press_ms > 5000 ||
         config->sequence_gap_ms < 100 ||
         config->sequence_gap_ms > 1500 ||
-        config->chord_window_ms < 25 ||
-        config->chord_window_ms > 250) {
+        config->simultaneous_window_ms < 20 ||
+        config->simultaneous_window_ms > 250) {
         return false;
     }
 

@@ -6,7 +6,7 @@ Il wearable è un terminale di input e feedback. L'autorità sul punteggio è
 l'app/server Playmaker. L'ESP32 non decide mai se un punto chiude un game, un set
 o il match.
 
-Protocol version: **3**.
+Protocol version: **4**.
 
 La v3 mantiene ACTION/ACK della v2 e aggiorna la configurazione delle gesture:
 token a 16 bit, gesture simultanee e parametro `chord_window_ms`.
@@ -68,26 +68,26 @@ andato perso, non applica nuovamente l'azione: restituisce lo stesso risultato.
 Su `TEMPORARY_ERROR` il wearable mantiene lo stesso comando e lo stesso ID in
 coda. `OK` e `REJECTED` sono terminali.
 
-## Token gesture v3
+## Token gesture v4
 
-Ogni step di una sequenza è un `uint16 little-endian`:
+Ogni step è un `uint16 little-endian`:
 
 | Bit | Contenuto |
 | --- | --- |
 | 0..3 | button mask: A, B, Moment, Undo |
-| 4..6 | primitive |
-| 7..15 | reserved = 0 |
+| 4..5 | primitive |
+| 6..15 | reserved = 0 |
 
-Primitive:
+Primitive: 0 click, 1 double, 2 triple, 3 long. La mask può contenere da 1 a 4
+pulsanti per **qualsiasi** primitive.
 
-- 0 = click
-- 1 = double click
-- 2 = triple click
-- 3 = long press
-- 4 = chord/simultanea
+Esempi:
 
-Per click/double/triple/long la mask deve contenere esattamente un pulsante.
-Per chord deve contenerne almeno due.
+```text
+A+B CLICK       mask=0x03 primitive=0
+A+B DOUBLE      mask=0x03 primitive=1
+A+B+M LONG      mask=0x07 primitive=3
+```
 
 ## CONFIG read
 
@@ -101,7 +101,7 @@ Header da 11 byte:
 | 3 | 2 | multi-click gap ms |
 | 5 | 2 | long press ms |
 | 7 | 2 | sequence gap ms |
-| 9 | 2 | chord window ms |
+| 9 | 2 | simultaneous window ms |
 
 Segue ogni mapping, 18 byte:
 
@@ -122,17 +122,10 @@ Infine 4 sound descriptor da 6 byte: frequency, duty-permille, duration.
 Ogni write viene prima validata, poi salvata in NVS e solo dopo pubblicata alla
 configurazione runtime.
 
-## Esempio A+B simultanei -> UNDO
+## Esempi configurabili
 
-Il default include una seconda gesture per UNDO:
-
-```text
-mask = A | B = 0b0011
-primitive = CHORD = 4
-token = (4 << 4) | 3 = 0x0043
-```
-
-Quando la chord viene riconosciuta i click individuali A e B vengono soppressi.
+`A+B click -> UNDO`, `A+B double -> POINT_A` e
+`A+B+Moment long -> PAIRING` sono mapping normali, senza eccezioni hardcoded.
 
 ## Modifiche fatte dall'app
 

@@ -2,76 +2,104 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#f5f5f7">
-  <title>Wearable config</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <title>Playmaker · Wearable</title>
   <style>
+    :root{--bg:#f4f5f7;--card:#fff;--ink:#101114;--muted:#71747b;--line:#e7e8eb;--accent:#111318;--good:#18a558;--danger:#b42332;--shadow:0 10px 30px #1118270d}
     *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1080px;margin:0 auto;padding:24px 16px 56px;background:#f5f5f7;color:#151515}
-    h1{font-size:1.8rem;margin:8px 0 4px}
-    h2{font-size:1.15rem;margin:0 0 16px}
-    .subtitle{color:#666;margin:0 0 20px}
-    .card{background:#fff;border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 1px 8px #00000010}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
-    .mapping{border-top:1px solid #eee;padding-top:12px;margin-top:12px}
-    .mapping:first-child{border-top:0;margin-top:0;padding-top:0}
-    .step{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0}
-    .chord{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 8px;border:1px solid #ddd;border-radius:10px}
-    .chord label{display:inline-flex;gap:4px;align-items:center}
-    button,input,select{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid #c9c9ce;background:#fff}
-    button{cursor:pointer}
-    button.primary{background:#151515;color:#fff;border-color:#151515}
-    button.danger{color:#a40018}
-    input[type=checkbox]{padding:0}
-    .status{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .dot{width:10px;height:10px;border-radius:50%;background:#999}
-    .dot.ok{background:#1a8f3b}
-    .dot.bad{background:#c62828}
-    .muted{color:#6b6b70;font-size:.92rem}
-    .badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:#f0f0f2;font-size:.85rem}
-    @media(max-width:600px){body{padding-top:14px}.card{padding:16px}.row{align-items:stretch}.row>label{width:100%}}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .shell{max-width:980px;margin:auto;padding:24px 16px 64px}
+    .hero{background:#0b0c10;color:#fff;border-radius:28px;padding:26px;margin-bottom:18px;box-shadow:0 18px 40px #0002}
+    .eyebrow{font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;color:#a8abb2;font-weight:700}
+    h1{font-size:clamp(1.7rem,5vw,2.6rem);margin:8px 0 6px;letter-spacing:-.04em}
+    .hero p{margin:0;color:#c6c8cd}
+    .statusbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+    .pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:8px 11px;background:#ffffff13;border:1px solid #ffffff18;font-size:.88rem}
+    .dot{width:8px;height:8px;border-radius:50%;background:#8b8e96}.dot.ok{background:#39d98a}.dot.bad{background:#ff5e6b}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px}
+    .card{background:var(--card);border-radius:24px;padding:20px;box-shadow:var(--shadow);border:1px solid #fff}
+    .card h2{font-size:1.2rem;margin:0 0 5px;letter-spacing:-.02em}
+    .hint{color:var(--muted);font-size:.91rem;line-height:1.42;margin:0 0 16px}
+    .timing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .field{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fafafa}
+    .field label{display:block;font-weight:700;font-size:.88rem;margin-bottom:3px}
+    .field small{display:block;color:var(--muted);font-size:.78rem;min-height:34px}
+    .number-row{display:flex;align-items:center;gap:8px;margin-top:9px}.number-row input{width:100%}
+    input,select,button{font:inherit}
+    input,select{border:1px solid #d7d8dc;background:white;border-radius:12px;padding:10px 12px;outline:none}
+    input:focus,select:focus{border-color:#737780;box-shadow:0 0 0 3px #1112}
+    button{border:0;border-radius:13px;padding:10px 14px;background:#eceef1;color:#111;cursor:pointer;font-weight:700}
+    button.primary{background:var(--accent);color:white}
+    button.ghost{background:transparent;border:1px solid var(--line)}
+    button.danger{background:#fff0f1;color:var(--danger)}
+    .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    .mapping{border:1px solid var(--line);border-radius:20px;padding:16px;margin:12px 0;background:#fff}
+    .mapping-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+    .mapping-title{font-weight:800}.mapping-summary{color:var(--muted);font-size:.84rem;margin-top:2px}
+    .step{background:#f7f7f9;border-radius:16px;padding:13px;margin:10px 0;border:1px solid #eeeef1}
+    .step-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.step-head strong{font-size:.86rem}
+    .buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
+    .button-chip{padding:10px 6px;border:1px solid #dfe0e4;background:white;border-radius:13px;font-weight:800;font-size:.83rem}
+    .button-chip.on{background:#111318;color:#fff;border-color:#111318;box-shadow:0 5px 14px #1112}
+    .step-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .step-controls label{font-size:.76rem;color:var(--muted);font-weight:700}.step-controls select{width:100%;margin-top:4px}
+    .mapping-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .sound-grid{display:grid;gap:10px}.sound-row{display:grid;grid-template-columns:120px repeat(3,1fr) auto;gap:8px;align-items:end;border-top:1px solid var(--line);padding-top:10px}.sound-row:first-child{border-top:0;padding-top:0}.sound-row label{font-size:.75rem;color:var(--muted)}.sound-row input{width:100%;margin-top:4px}
+    .empty{padding:22px;text-align:center;color:var(--muted);border:1px dashed #d6d8dd;border-radius:18px}
+    .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;background:#111;color:#fff;padding:11px 15px;border-radius:999px;box-shadow:0 10px 30px #0003;transition:.2s;z-index:10;font-weight:700;font-size:.9rem}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .loading{opacity:.45;pointer-events:none}
+    @media(max-width:700px){.shell{padding:12px 12px 52px}.hero{border-radius:22px;padding:20px}.card{border-radius:20px;padding:16px}.timing-grid{grid-template-columns:1fr}.sound-row{grid-template-columns:1fr 1fr}.sound-row strong{grid-column:1/-1}.buttons{grid-template-columns:repeat(2,1fr)}.step-controls{grid-template-columns:1fr}.toolbar{align-items:flex-start}.mapping-head{align-items:flex-start}}
   </style>
 </head>
 <body>
-  <h1>Wearable configuration</h1>
-  <p class="subtitle">ESP32-C3 · configurazione locale via Wi-Fi</p>
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">Playmaker · ESP32-C3</div>
+      <h1>Wearable configuration</h1>
+      <p>Ogni gesture è una combinazione di pulsanti + un tipo di pressione.</p>
+      <div class="statusbar">
+        <span class="pill"><span id="statusDot" class="dot"></span><span id="statusText">Connessione…</span></span>
+        <span class="pill" id="ssid">wearable_config_eps32_c3</span>
+        <span class="pill" id="ble">BLE: —</span>
+      </div>
+    </section>
 
-  <div class="card">
-    <div class="status">
-      <span id="statusDot" class="dot"></span>
-      <strong id="statusText">Connessione…</strong>
-      <span id="ssid" class="badge">wearable_config_eps32_c3</span>
-      <span id="ble" class="badge">BLE: —</span>
+    <div class="grid">
+      <section class="card">
+        <h2>Timing</h2>
+        <p class="hint">Questi valori definiscono come il firmware interpreta il gesto fisico. I default sono già adatti al primo test.</p>
+        <div class="timing-grid">
+          <div class="field"><label>Simultaneità</label><small>Scarto massimo tra la pressione dei pulsanti dello stesso gruppo.</small><div class="number-row"><input id="simultaneousMs" type="number" min="20" max="250"><span>ms</span></div></div>
+          <div class="field"><label>Multi-click</label><small>Tempo massimo tra due cicli dello stesso gruppo per doppio/triplo click.</small><div class="number-row"><input id="multiGap" type="number" min="120" max="1000"><span>ms</span></div></div>
+          <div class="field"><label>Pressione lunga</label><small>Durata minima del gruppo premuto per generare LONG.</small><div class="number-row"><input id="longMs" type="number" min="400" max="5000"><span>ms</span></div></div>
+          <div class="field"><label>Sequenza</label><small>Tempo massimo tra step diversi di una gesture composta.</small><div class="number-row"><input id="seqGap" type="number" min="100" max="1500"><span>ms</span></div></div>
+        </div>
+        <div style="margin-top:12px"><button id="saveTiming" class="primary">Salva timing</button></div>
+      </section>
+
+      <section class="card">
+        <div class="toolbar">
+          <div><h2>Gesture programmabili</h2><p class="hint" style="margin:3px 0 0">Seleziona 1–4 pulsanti e il tipo. Più step permettono sequenze avanzate.</p></div>
+          <button id="addMapping" class="primary">+ Nuova</button>
+        </div>
+        <div id="mappings"><div class="empty">Caricamento gesture…</div></div>
+      </section>
+
+      <section class="card">
+        <h2>Feedback sonoro</h2>
+        <p class="hint">Tono di conferma per le quattro azioni di gioco.</p>
+        <div id="sounds" class="sound-grid"><div class="empty">Caricamento suoni…</div></div>
+      </section>
+
+      <section class="card">
+        <h2>Ripristino</h2>
+        <p class="hint">Ripristina i mapping e i timing predefiniti. La configurazione viene salvata subito in NVS.</p>
+        <button id="defaults" class="danger">Ripristina configurazione predefinita</button>
+      </section>
     </div>
-    <div class="muted" style="margin-top:10px">Rete aperta senza password. I dettagli di debug sono nella console del browser.</div>
-  </div>
-
-  <div class="card">
-    <h2>Timing gesture</h2>
-    <div class="row">
-      <label>Sequenza <input id="seqGap" type="number" min="100" max="1500"> ms</label>
-      <label>Multi-click <input id="multiGap" type="number" min="120" max="1000"> ms</label>
-      <label>Long press <input id="longMs" type="number" min="400" max="5000"> ms</label>
-      <label>Simultanea <input id="chordMs" type="number" min="25" max="250"> ms</label>
-      <button id="saveTiming" class="primary">Salva timing</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Gesture → azione</h2>
-    <div id="mappings"></div>
-    <button id="addMapping">Aggiungi gesture</button>
-  </div>
-
-  <div class="card">
-    <h2>Suoni azioni</h2>
-    <div id="sounds"></div>
-  </div>
-
-  <div class="card">
-    <button id="defaults" class="danger">Ripristina configurazione di default</button>
-  </div>
-
+  </main>
+  <div id="toast" class="toast"></div>
   <script src="/app.js"></script>
 </body>
 </html>

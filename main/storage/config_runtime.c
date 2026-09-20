@@ -90,13 +90,13 @@ esp_err_t config_runtime_apply_command(const uint8_t *command,
     xSemaphoreGive(s_lock);
 
     ESP_LOGI(TAG,
-             "config committed opcode=0x%02x mappings=%u multi=%u long=%u sequence=%u chord=%u",
+             "config committed opcode=0x%02x mappings=%u multi=%u long=%u sequence=%u simultaneous=%u",
              (unsigned)command[0],
              (unsigned)next.mapping_count,
              (unsigned)next.multi_click_gap_ms,
              (unsigned)next.long_press_ms,
              (unsigned)next.sequence_gap_ms,
-             (unsigned)next.chord_window_ms);
+             (unsigned)next.simultaneous_window_ms);
 
     if (s_changed_cb != NULL) {
         s_changed_cb(&next, s_changed_ctx);

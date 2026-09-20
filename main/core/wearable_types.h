@@ -6,7 +6,7 @@
 
 #define WEARABLE_BUTTON_COUNT 4u
 #define WEARABLE_BUTTON_MASK_ALL ((uint8_t)((1u << WEARABLE_BUTTON_COUNT) - 1u))
-#define WEARABLE_PRIMITIVE_COUNT 5u
+#define WEARABLE_PRIMITIVE_COUNT 4u
 #define WEARABLE_MAX_SEQUENCE 8u
 #define WEARABLE_MAX_MAPPINGS 16u
 #define WEARABLE_ACTION_SOUND_COUNT 4u
@@ -25,7 +25,6 @@ typedef enum {
     WEARABLE_PRIMITIVE_DOUBLE = 1,
     WEARABLE_PRIMITIVE_TRIPLE = 2,
     WEARABLE_PRIMITIVE_LONG = 3,
-    WEARABLE_PRIMITIVE_CHORD = 4,
 } wearable_primitive_t;
 
 typedef enum {
@@ -39,11 +38,14 @@ typedef enum {
 /*
  * Gesture token wire/storage layout (16 bit):
  *   bits 0..3 = button mask (A/B/Moment/Undo)
- *   bits 4..6 = wearable_primitive_t
- *   bits 7..15 reserved
+ *   bits 4..5 = wearable_primitive_t
+ *   bits 6..15 reserved
  *
- * Single-button primitives have exactly one bit in the mask.
- * CHORD has at least two bits in the mask.
+ * The mask may contain 1..4 buttons for every primitive. This is what makes
+ * combinations first-class citizens:
+ *   A+B + CLICK
+ *   A+B + DOUBLE
+ *   A+B+MOMENT + LONG
  */
 static inline wearable_token_t wearable_token_from_mask(uint8_t button_mask,
                                                         wearable_primitive_t primitive)
@@ -66,7 +68,7 @@ static inline uint8_t wearable_token_button_mask(wearable_token_t token)
 
 static inline wearable_primitive_t wearable_token_primitive(wearable_token_t token)
 {
-    return (wearable_primitive_t)((token >> 4) & 0x07u);
+    return (wearable_primitive_t)((token >> 4) & 0x03u);
 }
 
 static inline uint8_t wearable_popcount4(uint8_t value)
@@ -80,21 +82,14 @@ static inline uint8_t wearable_popcount4(uint8_t value)
 
 static inline bool wearable_token_is_valid(wearable_token_t token)
 {
-    if ((token & 0xFF80u) != 0u) {
+    if ((token & 0xFFC0u) != 0u) {
         return false;
     }
 
     const uint8_t mask = wearable_token_button_mask(token);
     const wearable_primitive_t primitive = wearable_token_primitive(token);
 
-    if (mask == 0u || primitive >= WEARABLE_PRIMITIVE_COUNT) {
-        return false;
-    }
-
-    const uint8_t buttons = wearable_popcount4(mask);
-    return primitive == WEARABLE_PRIMITIVE_CHORD
-               ? buttons >= 2u
-               : buttons == 1u;
+    return mask != 0u && primitive < WEARABLE_PRIMITIVE_COUNT;
 }
 
 typedef struct {
@@ -119,7 +114,7 @@ typedef struct {
     uint16_t multi_click_gap_ms;
     uint16_t long_press_ms;
     uint16_t sequence_gap_ms;
-    uint16_t chord_window_ms;
+    uint16_t simultaneous_window_ms;
     uint8_t mapping_count;
     wearable_mapping_t mappings[WEARABLE_MAX_MAPPINGS];
     wearable_tone_t action_sounds[WEARABLE_ACTION_SOUND_COUNT];

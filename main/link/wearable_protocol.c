@@ -116,8 +116,7 @@ size_t wearable_encode_config(const wearable_config_t *config,
                               uint8_t *out,
                               size_t capacity)
 {
-    if (!wearable_config_is_valid(config) ||
-        out == NULL) {
+    if (!wearable_config_is_valid(config) || out == NULL) {
         return 0;
     }
 
@@ -137,22 +136,17 @@ size_t wearable_encode_config(const wearable_config_t *config,
     put16(&out[3], config->multi_click_gap_ms);
     put16(&out[5], config->long_press_ms);
     put16(&out[7], config->sequence_gap_ms);
-    put16(&out[9], config->chord_window_ms);
+    put16(&out[9], config->simultaneous_window_ms);
 
     size_t offset = WEARABLE_CONFIG_HEADER_SIZE;
 
-    for (uint8_t i = 0;
-         i < config->mapping_count;
-         ++i) {
-        const wearable_mapping_t *mapping =
-            &config->mappings[i];
+    for (uint8_t i = 0; i < config->mapping_count; ++i) {
+        const wearable_mapping_t *mapping = &config->mappings[i];
 
         out[offset++] = (uint8_t)mapping->action;
         out[offset++] = mapping->sequence.length;
 
-        for (uint8_t t = 0;
-             t < WEARABLE_MAX_SEQUENCE;
-             ++t) {
+        for (uint8_t t = 0; t < WEARABLE_MAX_SEQUENCE; ++t) {
             const wearable_token_t token =
                 t < mapping->sequence.length
                     ? mapping->sequence.tokens[t]
@@ -162,17 +156,12 @@ size_t wearable_encode_config(const wearable_config_t *config,
         }
     }
 
-    for (uint8_t i = 0;
-         i < WEARABLE_ACTION_SOUND_COUNT;
-         ++i) {
-        put16(&out[offset],
-              config->action_sounds[i].frequency_hz);
+    for (uint8_t i = 0; i < WEARABLE_ACTION_SOUND_COUNT; ++i) {
+        put16(&out[offset], config->action_sounds[i].frequency_hz);
         offset += 2;
-        put16(&out[offset],
-              config->action_sounds[i].duty_permille);
+        put16(&out[offset], config->action_sounds[i].duty_permille);
         offset += 2;
-        put16(&out[offset],
-              config->action_sounds[i].duration_ms);
+        put16(&out[offset], config->action_sounds[i].duration_ms);
         offset += 2;
     }
 
@@ -183,9 +172,7 @@ bool wearable_apply_config_command(wearable_config_t *config,
                                    const uint8_t *in,
                                    size_t len)
 {
-    if (config == NULL ||
-        in == NULL ||
-        len == 0u) {
+    if (config == NULL || in == NULL || len == 0u) {
         return false;
     }
 
@@ -213,16 +200,13 @@ bool wearable_apply_config_command(wearable_config_t *config,
             next.mapping_count++;
         }
 
-        wearable_mapping_t *mapping =
-            &next.mappings[index];
+        wearable_mapping_t *mapping = &next.mappings[index];
         memset(mapping, 0, sizeof(*mapping));
         mapping->enabled = true;
         mapping->action = (wearable_action_t)action;
         mapping->sequence.length = token_count;
 
-        for (uint8_t t = 0;
-             t < token_count;
-             ++t) {
+        for (uint8_t t = 0; t < token_count; ++t) {
             mapping->sequence.tokens[t] =
                 get16(&in[4u + (2u * t)]);
         }
@@ -230,8 +214,7 @@ bool wearable_apply_config_command(wearable_config_t *config,
     }
 
     case CONFIG_CMD_DELETE_MAPPING: {
-        if (len != 2u ||
-            in[1] >= next.mapping_count) {
+        if (len != 2u || in[1] >= next.mapping_count) {
             return false;
         }
 
@@ -240,8 +223,7 @@ bool wearable_apply_config_command(wearable_config_t *config,
         for (uint8_t i = index;
              i + 1u < next.mapping_count;
              ++i) {
-            next.mappings[i] =
-                next.mappings[i + 1u];
+            next.mappings[i] = next.mappings[i + 1u];
         }
 
         next.mapping_count--;
@@ -257,8 +239,7 @@ bool wearable_apply_config_command(wearable_config_t *config,
             return false;
         }
 
-        wearable_tone_t *tone =
-            &next.action_sounds[in[1]];
+        wearable_tone_t *tone = &next.action_sounds[in[1]];
         tone->frequency_hz = get16(&in[2]);
         tone->duty_permille = get16(&in[4]);
         tone->duration_ms = get16(&in[6]);
@@ -273,7 +254,7 @@ bool wearable_apply_config_command(wearable_config_t *config,
         next.sequence_gap_ms = get16(&in[1]);
         next.multi_click_gap_ms = get16(&in[3]);
         next.long_press_ms = get16(&in[5]);
-        next.chord_window_ms = get16(&in[7]);
+        next.simultaneous_window_ms = get16(&in[7]);
         break;
 
     case CONFIG_CMD_RESET_DEFAULTS:

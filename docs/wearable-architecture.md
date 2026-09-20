@@ -4,7 +4,7 @@ Firmware dedicato al wearable Playmaker. Stack: ESP-IDF + NimBLE.
 
 ## Architettura
 
-- **button_manager**: debounce, click/double/triple/long e chord simultanee.
+- **button_manager**: debounce, raggruppamento simultaneo di 1–4 pulsanti e classificazione click/double/triple/long.
 - **gesture_engine**: sequenze configurabili con risoluzione dei prefissi.
 - **config_model**: default e validazione indipendenti da ESP-IDF.
 - **config_store**: persistenza NVS.
@@ -31,18 +31,16 @@ GPIO
  -> feedback sonoro
 ```
 
-### Chord
+### Gruppi simultanei
 
-Default `chord_window_ms = 60`.
+Il primo press stabile apre una finestra configurabile, default 60 ms. Tutti i
+pulsanti che iniziano la pressione dentro la finestra formano un gruppo. Il
+gruppo viene poi classificato come CLICK, DOUBLE, TRIPLE o LONG.
 
-Il primo press stabile apre la finestra. Se almeno due pulsanti rimangono
-premuti fino alla chiusura della finestra viene emesso un singolo token CHORD
-con bitmask. Tutti i click/long dei pulsanti partecipanti sono consumati.
+Il LONG scatta appena supera la soglia mentre tutti i pulsanti del gruppo sono
+ancora tenuti premuti; non è necessario rilasciarli.
 
-Questo rende deterministico il caso A+B: non vengono mai emessi POINT_A,
-POINT_B e poi UNDO.
-
-La chord può anche essere uno step dentro una sequenza più lunga.
+Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`.
 
 ## Pinout PCB attuale
 
@@ -65,7 +63,7 @@ charger non alimentato non sono distinguibili senza un segnale VBUS separato.
 
 ## Configurazione e schema NVS
 
-La schema version corrente è **2**. Il passaggio dai vecchi token a 8 bit ai
+La schema version corrente è **3**. Il passaggio dai vecchi token a 8 bit ai
 token v3 a 16 bit invalida intenzionalmente la configurazione NVS precedente:
 al primo boot vengono caricati e salvati i nuovi default.
 
@@ -75,8 +73,9 @@ Il default contiene:
 - B click -> POINT_B
 - Moment click -> MOMENT
 - Undo click -> UNDO
-- A+B simultanei -> UNDO
-- Undo long -> pairing
+- A+B click -> UNDO
+- A+B doppio click -> POINT_A
+- A+B+Moment long -> pairing
 
 ## ACK autorevole
 

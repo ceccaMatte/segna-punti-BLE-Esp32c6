@@ -7,13 +7,11 @@
 #include "wearable_types.h"
 
 /*
- * Protocol v3 adds 16-bit gesture tokens, simultaneous-button CHORD gestures
- * and chord_window_ms to the configurable timing set.
- *
- * ACTION / ACK semantics remain authoritative: the wearable never computes
- * padel scoring locally.
+ * Protocol v4 makes simultaneous-button combinations first-class for every
+ * primitive. A token is always {button mask + click type}; there is no special
+ * CHORD primitive anymore.
  */
-#define WEARABLE_PROTOCOL_VERSION 3u
+#define WEARABLE_PROTOCOL_VERSION 4u
 
 #define WEARABLE_UUID_SERVICE "c4d10001-6f65-4b6e-ae30-706c61796d6b"
 #define WEARABLE_UUID_ACTION  "c4d10002-6f65-4b6e-ae30-706c61796d6b"

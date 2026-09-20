@@ -4,7 +4,7 @@
 
 #include "wearable_types.h"
 
-#define WEARABLE_CONFIG_SCHEMA_VERSION 2u
+#define WEARABLE_CONFIG_SCHEMA_VERSION 3u
 
 void wearable_config_set_defaults(wearable_config_t *out);
 bool wearable_config_is_valid(const wearable_config_t *config);
