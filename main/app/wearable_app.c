@@ -115,8 +115,8 @@ static void on_primitive(wearable_token_t token, void *ctx)
     (void)ctx;
     ESP_LOGD(TAG,
              "primitive token=0x%04x mask=0x%02x type=%u",
-             token,
-             wearable_token_button_mask(token),
+             (unsigned)token,
+             (unsigned)wearable_token_button_mask(token),
              (unsigned)wearable_token_primitive(token));
     gesture_engine_feed(token);
 }
