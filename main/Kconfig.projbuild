@@ -23,33 +23,50 @@ config WEARABLE_BUZZER_GPIO
 config WEARABLE_CHARGE_LED_GPIO
     int "Charge status LED GPIO (-1 disables)"
     default -1
-config WEARABLE_CHARGING_GPIO
-    int "Charger CHRG/status input GPIO (-1 disables)"
+
+config WEARABLE_CHARGER_STAT_ADC_CHANNEL
+    int "ADC1 channel connected to MCP73831 STAT divider"
+    range 0 4
+    default 4
+    help
+        PCB: MCP73831 STAT -> 100k -> battery_state -> 100k -> GND,
+        battery_state -> ESP32-C3 GPIO4 / ADC1_CH4.
+
+config WEARABLE_CHARGER_STAT_HIGH_RAW
+    int "ADC raw threshold: STAT HIGH / charge complete"
+    range 1 4094
+    default 1000
+    help
+        STAT is approximately 0 V while charging and approximately 2.5 V at
+        battery_state when MCP73831 drives STAT HIGH. The large voltage gap
+        makes a conservative raw ADC threshold sufficient; exact voltage
+        calibration is not required for this state decision.
+
+config WEARABLE_VBUS_SENSE_GPIO
+    int "5V/VBUS-present GPIO (-1 if unavailable)"
     default -1
-config WEARABLE_CHARGING_ACTIVE_LOW
-    bool "Charger status input is active low"
-    default y
-config WEARABLE_POWER_PRESENT_GPIO
-    int "USB/power-present input GPIO (-1 if unavailable)"
-    default -1
-config WEARABLE_POWER_PRESENT_ACTIVE_HIGH
-    bool "Power-present input is active high"
+    help
+        Needed to distinguish MCP73831 STAT LOW (charging) from STAT High-Z
+        (charger unpowered). With only the current STAT divider those two
+        conditions both pull battery_state near 0 V.
+
+config WEARABLE_VBUS_SENSE_ACTIVE_HIGH
+    bool "VBUS sense is active high"
     default y
 
-config WEARABLE_BATTERY_ADC_CHANNEL
-    int "ADC1 channel used by battery_state (-1 disables measurement)"
+config WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL
+    int "ADC1 channel for a dedicated Vbat divider (-1 if unavailable)"
     range -1 4
     default -1
     help
-        The provided schematic routes battery_state to GPIO4, i.e. ADC1_CH4.
-        Keep this disabled until the voltage-divider / source scaling of
-        battery_state is confirmed.
+        The current PCB does not expose Vbat through a dedicated ADC divider.
+        Leave disabled. It is required for a true low-battery voltage alarm.
 
 config WEARABLE_BATTERY_DIVIDER_NUM
-    int "Battery divider numerator"
+    int "Vbat divider numerator"
     default 1
 config WEARABLE_BATTERY_DIVIDER_DEN
-    int "Battery divider denominator"
+    int "Vbat divider denominator"
     default 1
 config WEARABLE_LOW_BATTERY_MV
     int "Low battery threshold (mV)"
