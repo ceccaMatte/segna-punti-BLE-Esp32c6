@@ -33,11 +33,24 @@ static esp_err_t send_embedded(httpd_req_t *req,
                                const unsigned char *start,
                                const unsigned char *end)
 {
+    size_t len = (size_t)(end - start);
+
+    /*
+     * ESP-IDF EMBED_TXTFILES appends a NUL terminator. That byte is useful
+     * when the asset is treated as a C string, but it must not be sent as part
+     * of JavaScript source: browsers can reject a script containing a raw NUL
+     * before any of its initialization code runs.
+     */
+    while (len > 0u && start[len - 1u] == 0u) {
+        len--;
+    }
+
     httpd_resp_set_type(req, content_type);
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate");
+    httpd_resp_set_hdr(req, "Pragma", "no-cache");
     return httpd_resp_send(req,
                            (const char *)start,
-                           (ssize_t)(end - start));
+                           (ssize_t)len);
 }
 
 static esp_err_t root_get(httpd_req_t *req)
@@ -51,7 +64,11 @@ static esp_err_t root_get(httpd_req_t *req)
 
 static esp_err_t app_js_get(httpd_req_t *req)
 {
-    ESP_LOGD(TAG, "HTTP GET /app.js");
+    const size_t raw_len =
+        (size_t)(config_ap_app_js_end - config_ap_app_js_start);
+    ESP_LOGI(TAG,
+             "HTTP GET /app.js -> embedded=%u bytes",
+             (unsigned)raw_len);
     return send_embedded(req,
                          "application/javascript; charset=utf-8",
                          config_ap_app_js_start,
