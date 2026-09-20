@@ -41,7 +41,9 @@ Analogamente, `battery_state` non permette di sapere quando la LiPo si sta scari
 
 ## Semantica ACK
 
-Ogni comando inviato dal wearable ha la chiave `(session_id, sequence)`. La web app deve deduplicare su questa coppia e rispondere sempre con lo stesso ACK se riceve un retry. L'ACK contiene anche flag autorevoli `GAME_ENDED`, `SET_ENDED` e `MATCH_ENDED`; il wearable puo' quindi riprodurre una melodia senza conoscere le regole del padel.
+Ogni comando inviato dal wearable ha la chiave `(session_id, sequence)`. La web app deve deduplicare su questa coppia e, se riceve un retry, restituire lo stesso ACK senza applicare nuovamente il comando.
+
+L'ACK v2 contiene lo stato partita autorevole **dopo** l'elaborazione del comando (revision, punti, game e set) e i flag di transizione `GAME_ENDED`, `SET_ENDED` e `MATCH_ENDED`. Il wearable non contiene il motore del punteggio. Questo evita divergenze quando la partita viene modificata direttamente dall'app: ogni nuovo comando viene applicato allo stato corrente lato app/server e il feedback sonoro deriva esclusivamente dall'ACK autorevole.
 
 ## Pairing
 

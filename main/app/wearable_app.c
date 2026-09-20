@@ -11,16 +11,46 @@
 
 static wearable_config_t s_config;
 
+/*
+ * This is only a cached copy for diagnostics/future UI decisions.
+ * The ESP32 never applies padel rules locally: every accepted command replaces
+ * this cache with the authoritative state returned by the app/server.
+ */
+static wearable_match_state_t s_match_state;
+static bool s_have_match_state;
+
 static void on_ack(wearable_action_t action, const wearable_ack_packet_t *ack, void *ctx)
 {
     (void)ctx;
+
+    if (ack->status != WEARABLE_ACK_OK) {
+        sound_manager_play_system(WEARABLE_SYS_ERROR);
+        return;
+    }
+
+    s_match_state = ack->state;
+    s_have_match_state = true;
+    (void)s_have_match_state;
+
+    /*
+     * Confirmation is intentionally delayed until the application-layer ACK.
+     * A BLE notification being delivered is not enough: the action is only
+     * considered real after the authoritative match engine has accepted it.
+     */
     sound_manager_play_action(action);
 
-    if (ack->flags & WEARABLE_ACK_FLAG_MATCH_ENDED) {
+    /*
+     * Transition flags belong to this exact command. The app/server computes
+     * them against its current authoritative state, which may already include
+     * edits made directly from the phone. Therefore a point that closes a game
+     * still produces the game melody even if the score was edited in the app
+     * just before the wearable command arrived.
+     */
+    if (ack->transition_flags & WEARABLE_ACK_FLAG_MATCH_ENDED) {
         sound_manager_play_system(WEARABLE_SYS_MATCH_END);
-    } else if (ack->flags & WEARABLE_ACK_FLAG_SET_ENDED) {
+    } else if (ack->transition_flags & WEARABLE_ACK_FLAG_SET_ENDED) {
         sound_manager_play_system(WEARABLE_SYS_SET_END);
-    } else if (ack->flags & WEARABLE_ACK_FLAG_GAME_ENDED) {
+    } else if (ack->transition_flags & WEARABLE_ACK_FLAG_GAME_ENDED) {
         sound_manager_play_system(WEARABLE_SYS_GAME_END);
     }
 }

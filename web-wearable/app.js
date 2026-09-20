@@ -63,6 +63,9 @@ function controlPacket(op, tokenBytes) {
 
 async function readStatus() {
   const dv = await chars.status.readValue();
+  if (dv.byteLength < 10 || dv.getUint8(0) !== 2 || dv.getUint8(1) !== 3) {
+    throw new Error('Status protocol mismatch');
+  }
   return {
     commissioned: dv.getUint8(2) !== 0,
     authenticated: dv.getUint8(3) !== 0,
@@ -172,17 +175,24 @@ function ackForAction(dv) {
   const cached = ackCache.get(key);
   if (cached) return cached;
 
-  // La pagina di configurazione non possiede il punteggio della partita.
-  // L'app Playmaker reale deve riempire flags/punti/game/set con il proprio
-  // stato autorevole. Qui ACK=ricevuto, stato neutro, utile per collaudare.
-  const out = new Uint8Array(18);
+  // Questa è solo la pagina di configurazione/collaudo: non possiede il
+  // motore partita. L'app Playmaker reale deve costruire questo ACK usando lo
+  // stato AUTOREVOLE dopo aver applicato il comando e deve mettere i flag
+  // GAME_ENDED / SET_ENDED / MATCH_ENDED causati da questo specifico comando.
+  //
+  // Layout ACK v2 (20 byte):
+  // [ver,type,status,transitions, session:u32, seq:u32, revision:u16,
+  //  pointsA,pointsB,gamesA,gamesB,setsA,setsB]
+  const out = new Uint8Array(20);
   const a = new DataView(out.buffer);
-  a.setUint8(0, 1);              // protocol version
+  a.setUint8(0, 2);              // protocol version
   a.setUint8(1, 2);              // ACK
-  a.setUint32(2, session, true);
-  a.setUint32(6, sequence, true);
-  a.setUint8(10, 0);             // GAME/SET/MATCH flags
-  // 11..16 = score snapshot, lasciato a zero
+  a.setUint8(2, 0);              // status = OK
+  a.setUint8(3, 0);              // transition flags
+  a.setUint32(4, session, true);
+  a.setUint32(8, sequence, true);
+  a.setUint16(12, 0, true);      // match revision (mock)
+  // 14..19 = authoritative score snapshot; zero in this test page.
   ackCache.set(key, out);
 
   if (ackCache.size > 64) {
@@ -194,7 +204,7 @@ function ackForAction(dv) {
 async function onAction(ev) {
   try {
     const dv = ev.target.value;
-    if (dv.byteLength < 12 || dv.getUint8(0) !== 1 || dv.getUint8(1) !== 1) return;
+    if (dv.byteLength < 12 || dv.getUint8(0) !== 2 || dv.getUint8(1) !== 1) return;
     await writeChar(chars.ack, ackForAction(dv));
   } catch (e) {
     console.error('ACK failed', e);
@@ -202,7 +212,7 @@ async function onAction(ev) {
 }
 
 function parseConfig(dv) {
-  if (dv.getUint8(0) !== 1 || dv.getUint8(1) !== 4) throw new Error('Config protocol mismatch');
+  if (dv.getUint8(0) !== 2 || dv.getUint8(1) !== 4) throw new Error('Config protocol mismatch');
   const count = dv.getUint8(2);
   const cfg = {
     mappingCount: count,
