@@ -15,7 +15,6 @@ static const char *TAG = "wearable_app";
 
 static wearable_config_t s_config;
 static wearable_match_state_t s_match_state;
-static bool s_have_match_state;
 
 static void on_ack(wearable_action_t action,
                    const wearable_ack_packet_t *ack,
@@ -33,7 +32,6 @@ static void on_ack(wearable_action_t action,
     }
 
     s_match_state = ack->state;
-    s_have_match_state = true;
 
     ESP_LOGD(TAG,
              "state rev=%u points=%u-%u games=%u-%u sets=%u-%u flags=0x%02x",
@@ -197,8 +195,7 @@ esp_err_t wearable_app_start(void)
                     NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
-
-    s_have_match_state = false;
+ 
     ESP_LOGI(TAG, "wearable started");
     return ESP_OK;
 }
