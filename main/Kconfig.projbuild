@@ -56,4 +56,12 @@ config WEARABLE_PAIRING_WINDOW_MS
     int "Pairing window (ms)"
     default 120000
 
+config WEARABLE_IDLE_SLEEP_MS
+    int "Deep-sleep timeout after last physical button press (ms)"
+    range 10000 3600000
+    default 300000
+    help
+        After this period without a physical button press the wearable enters
+        Deep-sleep. Any of the four buttons wakes the ESP32-C3. Default: 5 min.
+
 endmenu

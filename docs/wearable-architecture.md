@@ -148,3 +148,25 @@ essenziale. I dettagli rimangono nella console browser con prefisso
 
 Wi-Fi e BLE possono essere attivi nello stesso momento; la configurazione è
 serializzata da `config_runtime` per evitare race tra scritture HTTP e GATT.
+
+
+## Deep-sleep dopo inattività
+
+Il modulo `power/sleep_manager` misura esclusivamente l'attività fisica dei
+pulsanti. Ogni PRESS debounced azzera il timer. Con il default di
+`CONFIG_WEARABLE_IDLE_SLEEP_MS=300000`, dopo 5 minuti entra in Deep-sleep.
+
+Wake sources: i quattro pulsanti definiti in `hardware/board_pins.h`, con
+trigger LOW. La mappa fisica non viene duplicata nel power manager: viene letta
+dallo stesso board profile usato dal Button Manager.
+
+Prima di dormire viene verificato che nessun pulsante sia già premuto; in tal
+caso lo sleep viene rimandato per evitare un wake immediato. GPIO21, usato dal
+prototipo come ritorno LOW dei pulsanti, viene mantenuto LOW tramite
+`gpio_hold_en()` + `gpio_deep_sleep_hold_en()`.
+
+Al wake `board_io` ripristina GPIO21 LOW e rimuove il hold. Il firmware poi
+riparte normalmente, quindi le connessioni BLE e SoftAP vengono ricreate.
+
+La console seriale stampa banner molto visibili sia all'ingresso sia all'uscita
+dal Deep-sleep e, quando disponibile, la mask GPIO che ha causato il wake.

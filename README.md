@@ -22,7 +22,8 @@ padel. Il punteggio autorevole vive nell'applicazione Playmaker.
 - SoftAP Wi-Fi locale **aperta, senza password**, SSID
   `wearable_config_eps32_c3`, con pagina di configurazione su
   `http://192.168.4.1/`
-- struttura pronta per low-power / wake da pulsante
+- Deep-sleep automatico dopo **5 minuti senza pressioni**, con wake da uno
+  qualsiasi dei quattro pulsanti
 
 ## Regola fondamentale del punteggio
 
@@ -152,3 +153,26 @@ pubblicazione.
 
 La rete è volutamente aperta: chiunque sia nel raggio radio e si colleghi può
 modificare la configurazione del wearable.
+
+
+## Deep-sleep / autonomia
+
+Dopo `300000 ms` (5 minuti) senza alcuna pressione fisica il wearable entra
+in **Deep-sleep**. Il timeout viene azzerato alla pressione debounced di
+qualunque pulsante.
+
+I quattro pulsanti del prototipo sono tutti su GPIO0..3, quindi sono utilizzabili
+come sorgenti di wake da Deep-sleep sull'ESP32-C3. Il wake è level-low perché i
+pulsanti sono active-low.
+
+Il prototipo volante usa GPIO21 come ritorno LOW dei pulsanti: prima del
+Deep-sleep il firmware blocca GPIO21 a LOW con il pad hold, altrimenti il pin
+diventerebbe high-impedance e i pulsanti non potrebbero svegliare il chip.
+
+Il primo pulsante premuto dopo i 5 minuti **sveglia il dispositivo**; il wake da
+Deep-sleep riavvia il firmware e BLE/SoftAP vengono quindi ricreati e
+riconnessi normalmente.
+
+Nel monitor seriale i passaggi sono evidenziati dai banner
+`ENTERING DEEP SLEEP` e `WAKE FROM DEEP SLEEP`, incluso il GPIO/pulsante che
+ha causato il wake.
