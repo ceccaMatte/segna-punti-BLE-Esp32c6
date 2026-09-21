@@ -52,6 +52,21 @@ esp_err_t board_io_init(void)
         return err;
     }
 
+    /*
+     * sleep_manager holds GPIO21 LOW during Deep-sleep so the flying
+     * prototype's buttons still have a real LOW return. Restore a known LOW
+     * output first, then release the Deep-sleep hold after wake.
+     */
+    err = gpio_hold_dis((gpio_num_t)BOARD_GPIO_GND_SINK);
+    if (err != ESP_OK && err != ESP_ERR_NOT_SUPPORTED) {
+        ESP_LOGW(TAG,
+                 "GPIO%d hold release returned %s",
+                 BOARD_GPIO_GND_SINK,
+                 esp_err_to_name(err));
+    }
+    gpio_deep_sleep_hold_dis();
+    gpio_set_level((gpio_num_t)BOARD_GPIO_GND_SINK, 0);
+
     ESP_LOGI(TAG,
              "prototype IO: GPIO%d=input level=%d, GPIO%d=LOW",
              BOARD_GPIO_AUX_INPUT,

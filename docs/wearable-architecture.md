@@ -46,10 +46,10 @@ Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`.
 
 | Funzione | ESP32-C3 GPIO | Configurazione |
 | --- | ---: | --- |
-| BTN_Moment | GPIO0 | input, pull-up interno, active-low |
-| BTN_B | GPIO1 | input, pull-up interno, active-low |
-| BTN_A | GPIO2 | input, pull-up interno, active-low |
-| BTN_UNDO | GPIO3 | input, pull-up interno, active-low |
+| BTN_B | GPIO0 | input, pull-up interno, active-low |
+| BTN_Moment | GPIO1 | input, pull-up interno, active-low |
+| BTN_UNDO | GPIO2 | input, pull-up interno, active-low |
+| BTN_A | GPIO3 | input, pull-up interno, active-low |
 | battery_state | GPIO4 | MCP73831 STAT via partitore, ADC1_CH4 |
 | Buzzer | GPIO5 | riservato; non montato sul prototipo |
 | AUX | GPIO20 | input, nessun pull |
@@ -71,7 +71,7 @@ charger non alimentato non sono distinguibili senza un segnale VBUS separato.
 
 ## Configurazione e schema NVS
 
-La schema version corrente è **3**. Il passaggio dai vecchi token a 8 bit ai
+La schema version corrente è **5**. Il passaggio dai vecchi token a 8 bit ai
 token v3 a 16 bit invalida intenzionalmente la configurazione NVS precedente:
 al primo boot vengono caricati e salvati i nuovi default.
 
@@ -83,7 +83,8 @@ Il default contiene:
 - Undo click -> UNDO
 - A+B click -> UNDO
 - A+B doppio click -> POINT_A
-- A+B+Moment long -> pairing
+- Moment doppio click -> VAR
+- Undo long -> pairing
 
 ## ACK autorevole
 
@@ -147,3 +148,25 @@ essenziale. I dettagli rimangono nella console browser con prefisso
 
 Wi-Fi e BLE possono essere attivi nello stesso momento; la configurazione è
 serializzata da `config_runtime` per evitare race tra scritture HTTP e GATT.
+
+
+## Deep-sleep dopo inattività
+
+Il modulo `power/sleep_manager` misura esclusivamente l'attività fisica dei
+pulsanti. Ogni PRESS debounced azzera il timer. Con il default di
+`CONFIG_WEARABLE_IDLE_SLEEP_MS=300000`, dopo 5 minuti entra in Deep-sleep.
+
+Wake sources: i quattro pulsanti definiti in `hardware/board_pins.h`, con
+trigger LOW. La mappa fisica non viene duplicata nel power manager: viene letta
+dallo stesso board profile usato dal Button Manager.
+
+Prima di dormire viene verificato che nessun pulsante sia già premuto; in tal
+caso lo sleep viene rimandato per evitare un wake immediato. GPIO21, usato dal
+prototipo come ritorno LOW dei pulsanti, viene mantenuto LOW tramite
+`gpio_hold_en()` + `gpio_deep_sleep_hold_en()`.
+
+Al wake `board_io` ripristina GPIO21 LOW e rimuove il hold. Il firmware poi
+riparte normalmente, quindi le connessioni BLE e SoftAP vengono ricreate.
+
+La console seriale stampa banner molto visibili sia all'ingresso sia all'uscita
+dal Deep-sleep e, quando disponibile, la mask GPIO che ha causato il wake.

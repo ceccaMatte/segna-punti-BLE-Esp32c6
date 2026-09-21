@@ -1,5 +1,7 @@
-const PROTOCOL_VERSION = 4;
-const ACTIONS = ['Punto A', 'Punto B', 'Moment', 'Undo', 'Pairing'];
+const PROTOCOL_VERSION = 5;
+const ACTIONS = ['Punto A', 'Punto B', 'Moment', 'Undo', 'VAR', 'Pairing'];
+const PAIRING_ACTION = 5;
+const SOUND_ACTION_COUNT = 5;
 const BUTTONS = ['A', 'B', 'Moment', 'Undo'];
 const TYPES = ['Click', 'Doppio click', 'Triplo click', 'Pressione lunga'];
 const MAX_SEQUENCE = 8;
@@ -53,7 +55,7 @@ function parseConfig(buffer) {
   }
   const count = dv.getUint8(2);
   if (count > MAX_MAPPINGS) throw new Error('Numero gesture non valido');
-  const wanted = CONFIG_HEADER_SIZE + count * CONFIG_MAPPING_SIZE + 24;
+  const wanted = CONFIG_HEADER_SIZE + count * CONFIG_MAPPING_SIZE + SOUND_ACTION_COUNT * 6;
   if (dv.byteLength < wanted) throw new Error('Pacchetto configurazione incompleto');
 
   const result = {
@@ -75,7 +77,7 @@ function parseConfig(buffer) {
     }
     result.mappings.push({ action, seq: sequence });
   }
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < SOUND_ACTION_COUNT; i++) {
     result.sounds.push({ frequency:u16(dv,offset), duty:u16(dv,offset+2), duration:u16(dv,offset+4) });
     offset += 6;
   }
@@ -123,10 +125,10 @@ function render() {
   $('seqGap').value=config.seqGap; $('multiGap').value=config.multiGap;
   $('longMs').value=config.longMs; $('simultaneousMs').value=config.simultaneousMs;
 
-  const pairingCount = config.mappings.filter(m => m.action === 4).length;
+  const pairingCount = config.mappings.filter(m => m.action === PAIRING_ACTION).length;
   $('mappings').innerHTML = config.mappings.length ? config.mappings.map((m,i)=>{
     const summary=m.seq.map(stepLabel).join(' → ');
-    const protectsPairing = m.action === 4 && pairingCount === 1;
+    const protectsPairing = m.action === PAIRING_ACTION && pairingCount === 1;
     return `<div class="mapping">
       <div class="mapping-head"><div><div class="mapping-title">Gesture ${i+1}</div>
       <div class="mapping-summary">${summary} → ${ACTIONS[m.action]}</div></div>
@@ -165,8 +167,8 @@ async function saveMapping(index) {
   if(m.seq.some(v=>tokenMask(v)===0)) throw new Error('Ogni step deve avere almeno un pulsante selezionato.');
 
   const otherPairing = config.mappings.some((mapping, i) =>
-    i !== index && mapping.action === 4);
-  if (beforeAction === 4 && m.action !== 4 && !otherPairing) {
+    i !== index && mapping.action === PAIRING_ACTION);
+  if (beforeAction === PAIRING_ACTION && m.action !== PAIRING_ACTION && !otherPairing) {
     m.action = beforeAction;
     render();
     throw new Error('Deve esistere sempre almeno una gesture di Pairing. Crea prima la nuova gesture Pairing, poi modifica questa.');

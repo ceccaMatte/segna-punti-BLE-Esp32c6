@@ -10,6 +10,7 @@ idf_component_register(
         "storage/config_runtime.c"
         "feedback/sound_manager.c"
         "power/power_manager.c"
+        "power/sleep_manager.c"
         "link/wearable_protocol.c"
         "link/ble_manager.c"
         "web/config_ap.c"
@@ -31,6 +32,7 @@ idf_component_register(
         esp_driver_ledc
         esp_adc
         esp_timer
+        esp_system
         esp_wifi
         esp_http_server
         esp_event

@@ -48,7 +48,7 @@ size_t wearable_encode_action(const wearable_action_packet_t *packet,
     if (packet == NULL ||
         out == NULL ||
         capacity < WEARABLE_ACTION_PACKET_SIZE ||
-        packet->action > WEARABLE_ACTION_UNDO) {
+        packet->action > WEARABLE_ACTION_VAR) {
         return 0;
     }
 

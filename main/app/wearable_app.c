@@ -9,6 +9,7 @@
 #include "gesture_engine.h"
 #include "power_manager.h"
 #include "sound_manager.h"
+#include "sleep_manager.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -159,6 +160,18 @@ esp_err_t wearable_app_start(void)
     esp_err_t err = board_io_init();
     if (err != ESP_OK) {
         return err;
+    }
+
+    /*
+     * Start inactivity tracking immediately after board IO is restored. On a
+     * Deep-sleep wake this also prints the wake banner before the rest of the
+     * application starts.
+     */
+    err = sleep_manager_start();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG,
+                 "Deep-sleep manager unavailable: %s",
+                 esp_err_to_name(err));
     }
 
     err = config_store_init();

@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+#include "sleep_manager.h"
 
 #define DEBOUNCE_MS 25u
 #define POLL_MS 5u
@@ -348,6 +349,7 @@ static void button_task(void *arg)
 
                 if (raw) {
                     state->pressed_at_us = edge_us;
+                    sleep_manager_note_button_activity();
 
                     ESP_LOGI(TAG,
                              "TIMING button=%s gpio=%d edge=PRESS t_us=%lld t_ms=%lld debounce_ms=%u",
