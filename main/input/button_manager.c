@@ -121,7 +121,7 @@ static void emit_token(wearable_token_t token)
     }
 
     ESP_LOGI(TAG,
-             "emit type=%s mask=0x%02x token=0x%04x",
+             "---[EMIT]--- type=%s mask=0x%02x token=0x%04x",
              primitive_name(wearable_token_primitive(token)),
              (unsigned)wearable_token_button_mask(token),
              (unsigned)token);
