@@ -5,7 +5,6 @@
 #include "driver/gpio.h"
 #include "board_pins.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
@@ -20,7 +19,6 @@ typedef struct {
     bool raw;
     bool stable;
     uint32_t raw_since;
-    int64_t pressed_at_us;
 } button_state_t;
 
 typedef struct {
@@ -385,10 +383,7 @@ static void button_task(void *arg)
                 (uint32_t)(now - state->raw_since) >= DEBOUNCE_MS) {
                 state->stable = raw;
 
-                const int64_t edge_us = esp_timer_get_time();
-
                 if (raw) {
-                    state->pressed_at_us = edge_us;
                     sleep_manager_note_button_activity();
 
                     ESP_LOGD(TAG,
@@ -399,11 +394,6 @@ static void button_task(void *arg)
                                           now,
                                           simultaneous_window_ms);
                 } else {
-                    const int64_t held_us =
-                        state->pressed_at_us > 0
-                            ? edge_us - state->pressed_at_us
-                            : 0;
-
                     ESP_LOGD(TAG,
                              "debounced button=%s edge=RELEASE",
                              button_name(i));
@@ -484,8 +474,6 @@ esp_err_t button_manager_start(const wearable_config_t *config,
         s_state[i].raw = is_pressed(s_pins[i]);
         s_state[i].stable = s_state[i].raw;
         s_state[i].raw_since = now;
-        s_state[i].pressed_at_us =
-            s_state[i].stable ? esp_timer_get_time() : 0;
 
         ESP_LOGD(TAG,
                  "button=%s gpio=%d initial=%s level=%d",
