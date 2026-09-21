@@ -240,6 +240,23 @@ static void finalize_group_if_due(uint32_t now)
     s_group.collecting = false;
     s_group.finalized = true;
 
+    /*
+     * A press that started inside the previous multi-click window only belongs
+     * to that series if the completed simultaneous mask is identical. If the
+     * user pressed a different button/group, close the old click immediately
+     * instead of delaying it until this unrelated press is released.
+     */
+    if (s_group.multi_started_in_time &&
+        s_clicks.count != 0u &&
+        s_clicks.mask != s_group.mask) {
+        ESP_LOGD(TAG,
+                 "multi continuation mask mismatch pending=0x%02x new=0x%02x",
+                 (unsigned)s_clicks.mask,
+                 (unsigned)s_group.mask);
+        flush_clicks();
+        s_group.multi_started_in_time = false;
+    }
+
     ESP_LOGI(TAG,
              "group finalized mask=0x%02x buttons=%u",
              (unsigned)s_group.mask,
