@@ -19,10 +19,10 @@ void wearable_config_set_defaults(wearable_config_t *out)
 
     memset(out, 0, sizeof(*out));
     out->schema_version = WEARABLE_CONFIG_SCHEMA_VERSION;
-    out->multi_click_gap_ms = 300;
-    out->long_press_ms = 1200;
-    out->sequence_gap_ms = 300;
-    out->simultaneous_window_ms = 60;
+    out->multi_click_gap_ms = WEARABLE_DEFAULT_MULTI_CLICK_GAP_MS;
+    out->long_press_ms = WEARABLE_DEFAULT_LONG_PRESS_MS;
+    out->sequence_gap_ms = WEARABLE_DEFAULT_SEQUENCE_GAP_MS;
+    out->simultaneous_window_ms = WEARABLE_DEFAULT_SIMULTANEOUS_WINDOW_MS;
     out->mapping_count = 7;
 
     out->mappings[0] = (wearable_mapping_t){
