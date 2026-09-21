@@ -1,4 +1,4 @@
-const PROTOCOL_VERSION = 4;
+const PROTOCOL_VERSION = 5;
 const SERVICE = 'c4d10001-6f65-4b6e-ae30-706c61796d6b';
 const UUID = {
   action:'c4d10002-6f65-4b6e-ae30-706c61796d6b',
@@ -6,7 +6,7 @@ const UUID = {
   control:'c4d10004-6f65-4b6e-ae30-706c61796d6b',
   status:'c4d10005-6f65-4b6e-ae30-706c61796d6b',
 };
-const ACTION = { POINT_A:0, POINT_B:1, MOMENT:2, UNDO:3 };
+const ACTION = { POINT_A:0, POINT_B:1, MOMENT:2, UNDO:3, VAR:4 };
 const ACK = { OK:0, REJECTED:1, TEMP:2 };
 const FLAG = { GAME:1, SET:2, MATCH:4 };
 const RETRY_MS=[500,500,1000,1000,2000,3000,5000,8000];
@@ -77,7 +77,7 @@ function addTiebreakPoint(team){
   return 0;
 }
 function applyAction(action){
-  if(action===ACTION.MOMENT)return {status:ACK.OK,flags:0};
+  if(action===ACTION.MOMENT||action===ACTION.VAR)return {status:ACK.OK,flags:0};
   if(action===ACTION.UNDO){
     if(!history.length)return {status:ACK.REJECTED,flags:0};
     const previous=history.pop();const revision=state.revision+1;state=previous;state.revision=revision;render();
@@ -146,7 +146,7 @@ async function onAction(ev){
     if(!ack){
       const result=applyAction(action);ack=makeAck(session,sequence,result.status,result.flags);ackCache.set(key,ack);
       if(ackCache.size>64)ackCache.delete(ackCache.keys().next().value);
-      eventText(`ACTION ${['POINT_A','POINT_B','MOMENT','UNDO'][action]??action} · seq ${sequence} · flags 0x${result.flags.toString(16)}`);
+      eventText(`ACTION ${['POINT_A','POINT_B','MOMENT','UNDO','VAR'][action]??action} · seq ${sequence} · flags 0x${result.flags.toString(16)}`);
     }else eventText(`Retry seq ${sequence}: restituito ACK cached`);
     await writeChar(chars.ack,ack);
   }catch(e){err('ACTION/ACK',e);eventText('Errore ACTION/ACK: '+e.message)}

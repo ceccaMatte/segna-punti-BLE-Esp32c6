@@ -10,8 +10,8 @@ padel. Il punteggio autorevole vive nell'applicazione Playmaker.
 - gesture configurabili: click, doppio click, triplo click, pressione lunga e
   **pressione simultanea (chord)**
 - sequenze di gesture configurabili e persistenti in NVS
-- mapping gesture -> POINT_A / POINT_B / MOMENT / UNDO / pairing
-- mapping di default aggiuntivo: **A+B simultanei -> UNDO**
+- mapping gesture -> POINT_A / POINT_B / MOMENT / UNDO / VAR / pairing
+- default: **Moment doppio click -> VAR** e **Undo long press -> pairing**
 - BLE NimBLE con commissioning persistente e riconnessione lato Web Bluetooth
 - coda comandi con `session_id + sequence`, retry e ACK idempotenti
 - ACK con stato partita autorevole e transizioni GAME/SET/MATCH
@@ -52,7 +52,8 @@ logica vale per uno o più pulsanti:
 A + CLICK                  -> POINT_A
 A+B + CLICK                -> UNDO
 A+B + DOUBLE               -> POINT_A
-A+B+MOMENT + LONG          -> PAIRING
+MOMENT + DOUBLE            -> VAR
+UNDO + LONG                 -> PAIRING
 ```
 
 La finestra `simultaneous_window_ms` (default 60 ms) indica quanto possono
@@ -98,10 +99,10 @@ Il vecchio codice ESP32-C6 relativo a display, motore punteggio, UI e scoreboard
 
 ## Hardware attuale — prototipo volante
 
-- BTN_Moment: **GPIO0**, input con pull-up interno, active-low
-- BTN_B: **GPIO1**, input con pull-up interno, active-low
-- BTN_A: **GPIO2**, input con pull-up interno, active-low
-- BTN_UNDO: **GPIO3**, input con pull-up interno, active-low
+- BTN_B: **GPIO0**, input con pull-up interno, active-low
+- BTN_Moment: **GPIO1**, input con pull-up interno, active-low
+- BTN_UNDO: **GPIO2**, input con pull-up interno, active-low
+- BTN_A: **GPIO3**, input con pull-up interno, active-low
 - GPIO20: **input**
 - GPIO21: mantenuto **LOW** come ritorno di massa logica del prototipo
 - buzzer: **GPIO5** riservato; sul prototipo attuale il buzzer non è montato

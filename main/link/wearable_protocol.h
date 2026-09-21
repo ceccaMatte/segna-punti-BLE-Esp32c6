@@ -7,11 +7,10 @@
 #include "wearable_types.h"
 
 /*
- * Protocol v4 makes simultaneous-button combinations first-class for every
- * primitive. A token is always {button mask + click type}; there is no special
- * CHORD primitive anymore.
+ * Protocol v5 adds the gameplay action VAR. Token/config layout is otherwise
+ * unchanged from v4.
  */
-#define WEARABLE_PROTOCOL_VERSION 4u
+#define WEARABLE_PROTOCOL_VERSION 5u
 
 #define WEARABLE_UUID_SERVICE "c4d10001-6f65-4b6e-ae30-706c61796d6b"
 #define WEARABLE_UUID_ACTION  "c4d10002-6f65-4b6e-ae30-706c61796d6b"
