@@ -50,6 +50,9 @@ static void test_defaults_are_valid(void)
     assert(wearable_config_is_valid(&config));
     assert(config.schema_version == WEARABLE_CONFIG_SCHEMA_VERSION);
     assert(config.mapping_count == 7u);
+    assert(config.multi_click_gap_ms == 280u);
+    assert(config.long_press_ms == 450u);
+    assert(config.sequence_gap_ms == 300u);
     assert(config.simultaneous_window_ms == 60u);
 
     const uint8_t ab =
