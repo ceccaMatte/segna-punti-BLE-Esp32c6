@@ -37,6 +37,8 @@ static void test_tokens(void)
         wearable_token_from_mask(ab, WEARABLE_PRIMITIVE_TRIPLE)));
     assert(wearable_token_is_valid(
         wearable_token_from_mask(ab, WEARABLE_PRIMITIVE_LONG)));
+    assert(wearable_token_is_valid(
+        wearable_token_from_mask(ab, WEARABLE_PRIMITIVE_RELEASE)));
 
     assert(!wearable_token_is_valid(
         wearable_token_from_mask(0, WEARABLE_PRIMITIVE_CLICK)));
@@ -49,7 +51,7 @@ static void test_defaults_are_valid(void)
 
     assert(wearable_config_is_valid(&config));
     assert(config.schema_version == WEARABLE_CONFIG_SCHEMA_VERSION);
-    assert(config.mapping_count == 8u);
+    assert(config.mapping_count == 12u);
     assert(config.multi_click_gap_ms == 280u);
     assert(config.long_press_ms == 450u);
     assert(config.sequence_gap_ms == 300u);
@@ -75,6 +77,23 @@ static void test_defaults_are_valid(void)
     assert(config.mappings[7].sequence.tokens[0] ==
            wearable_token(WEARABLE_BUTTON_UNDO,
                           WEARABLE_PRIMITIVE_LONG));
+
+    assert(config.mappings[8].action == WEARABLE_ACTION_FAST_FORWARD_START);
+    assert(config.mappings[8].sequence.tokens[0] ==
+           wearable_token(WEARABLE_BUTTON_B,
+                          WEARABLE_PRIMITIVE_LONG));
+    assert(config.mappings[9].action == WEARABLE_ACTION_STOP);
+    assert(config.mappings[9].sequence.tokens[0] ==
+           wearable_token(WEARABLE_BUTTON_B,
+                          WEARABLE_PRIMITIVE_RELEASE));
+    assert(config.mappings[10].action == WEARABLE_ACTION_FAST_REWIND_START);
+    assert(config.mappings[10].sequence.tokens[0] ==
+           wearable_token(WEARABLE_BUTTON_A,
+                          WEARABLE_PRIMITIVE_LONG));
+    assert(config.mappings[11].action == WEARABLE_ACTION_STOP);
+    assert(config.mappings[11].sequence.tokens[0] ==
+           wearable_token(WEARABLE_BUTTON_A,
+                          WEARABLE_PRIMITIVE_RELEASE));
 }
 
 static void test_action_packet(void)
@@ -95,6 +114,19 @@ static void test_action_packet(void)
     assert(wearable_encode_action(&action, out, sizeof(out)) ==
            WEARABLE_ACTION_PACKET_SIZE);
     assert(out[10] == WEARABLE_ACTION_VAR);
+
+    action.action = WEARABLE_ACTION_FAST_FORWARD_START;
+    assert(wearable_encode_action(&action, out, sizeof(out)) ==
+           WEARABLE_ACTION_PACKET_SIZE);
+    assert(out[10] == WEARABLE_ACTION_FAST_FORWARD_START);
+
+    action.action = WEARABLE_ACTION_FAST_REWIND_START;
+    assert(wearable_encode_action(&action, out, sizeof(out)) ==
+           WEARABLE_ACTION_PACKET_SIZE);
+
+    action.action = WEARABLE_ACTION_STOP;
+    assert(wearable_encode_action(&action, out, sizeof(out)) ==
+           WEARABLE_ACTION_PACKET_SIZE);
 
     action.action = WEARABLE_ACTION_ENTER_PAIRING;
     assert(wearable_encode_action(&action, out, sizeof(out)) == 0u);
@@ -147,7 +179,7 @@ static void test_mapping_commands(void)
 
     uint8_t append[4 + 2 * WEARABLE_MAX_SEQUENCE] = {0};
     append[0] = 0x10;
-    append[1] = 8;
+    append[1] = 12;
     append[2] = WEARABLE_ACTION_UNDO;
     append[3] = 1;
 
@@ -159,7 +191,7 @@ static void test_mapping_commands(void)
     put_u16(&append[4], token);
 
     assert(wearable_apply_config_command(&config, append, sizeof(append)));
-    assert(config.mapping_count == 9u);
+    assert(config.mapping_count == 13u);
     assert(wearable_config_is_valid(&config));
 }
 

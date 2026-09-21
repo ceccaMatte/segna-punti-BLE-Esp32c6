@@ -886,7 +886,7 @@ esp_err_t ble_manager_start(wearable_config_t *config,
 
 bool ble_manager_send_action(wearable_action_t action)
 {
-    if (action > WEARABLE_ACTION_VAR ||
+    if (action > WEARABLE_ACTION_STOP ||
         !s_authenticated ||
         s_lock == NULL) {
         return false;

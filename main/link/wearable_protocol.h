@@ -7,10 +7,10 @@
 #include "wearable_types.h"
 
 /*
- * Protocol v5 adds the gameplay action VAR. Token/config layout is otherwise
- * unchanged from v4.
+ * Protocol v6 adds FAST_FORWARD_START, FAST_REWIND_START and STOP actions,
+ * plus the RELEASE-after-long gesture primitive.
  */
-#define WEARABLE_PROTOCOL_VERSION 5u
+#define WEARABLE_PROTOCOL_VERSION 6u
 
 #define WEARABLE_UUID_SERVICE "c4d10001-6f65-4b6e-ae30-706c61796d6b"
 #define WEARABLE_UUID_ACTION  "c4d10002-6f65-4b6e-ae30-706c61796d6b"

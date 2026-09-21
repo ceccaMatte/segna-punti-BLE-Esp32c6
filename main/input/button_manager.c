@@ -79,6 +79,7 @@ static const char *primitive_name(wearable_primitive_t primitive)
     case WEARABLE_PRIMITIVE_DOUBLE: return "double";
     case WEARABLE_PRIMITIVE_TRIPLE: return "triple";
     case WEARABLE_PRIMITIVE_LONG: return "long";
+    case WEARABLE_PRIMITIVE_RELEASE: return "release";
     default: return "?";
     }
 }
@@ -205,9 +206,16 @@ static void start_or_extend_group(uint8_t button,
         s_group.mask = bit;
         s_group.first_press_ms = now;
         s_group.collect_deadline_ms = now + simultaneous_window_ms;
+        /*
+         * Use the physical RAW edge timestamp, not the debounced time. If the
+         * second click started inside the multi-click window but debounce
+         * completes a few milliseconds later, it must still belong to the
+         * same multi-click. This prevents CLICK + DOUBLE for the same gesture.
+         */
         s_group.multi_started_in_time =
             s_clicks.count != 0u &&
-            (int32_t)(now - s_clicks.deadline_ms) < 0;
+            (int32_t)(s_clicks.deadline_ms -
+                      s_state[button].raw_since) >= 0;
 
         ESP_LOGD(TAG,
                  "group open mask=0x%02x window=%u ms multi_pending=%u started_in_time=%d",
@@ -265,6 +273,29 @@ static void finalize_group_if_due(uint32_t now)
              (unsigned)wearable_popcount4(s_group.mask));
 }
 
+static bool pending_raw_press_started_in_time(void)
+{
+    if (s_clicks.count == 0u) {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < WEARABLE_BUTTON_COUNT; ++i) {
+        /*
+         * A new physical press can arrive just before the multi-click
+         * deadline while its debounced PRESS is recognized just after it.
+         * Keep the pending click alive across that debounce interval.
+         */
+        if (s_state[i].raw &&
+            !s_state[i].stable &&
+            (int32_t)(s_clicks.deadline_ms -
+                      s_state[i].raw_since) >= 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static void process_finalized_group(uint32_t now,
                                     uint16_t multi_click_gap_ms,
                                     uint16_t long_press_ms)
@@ -300,6 +331,18 @@ static void process_finalized_group(uint32_t now,
                              now,
                              multi_click_gap_ms,
                              s_group.multi_started_in_time);
+    } else {
+        /*
+         * RELEASE is a semantic primitive only after LONG was already emitted
+         * at threshold crossing. Therefore a hold produces two independent
+         * events: LONG while still pressed, then RELEASE when the whole group
+         * is released.
+         */
+        emit_mask(mask, WEARABLE_PRIMITIVE_RELEASE);
+        ESP_LOGI(TAG,
+                 "release-after-long mask=0x%02x held=%lu ms",
+                 (unsigned)mask,
+                 (unsigned long)held_ms);
     }
 
     ESP_LOGD(TAG,
@@ -389,8 +432,9 @@ static void button_task(void *arg)
         if (s_clicks.count != 0u &&
             (int32_t)(now - s_clicks.deadline_ms) >= 0) {
             const bool next_press_started_in_time =
-                (s_group.collecting || s_group.finalized) &&
-                s_group.multi_started_in_time;
+                ((s_group.collecting || s_group.finalized) &&
+                 s_group.multi_started_in_time) ||
+                pending_raw_press_started_in_time();
 
             if (!next_press_started_in_time) {
                 flush_clicks();

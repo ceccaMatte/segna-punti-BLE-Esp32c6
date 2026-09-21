@@ -23,7 +23,7 @@ void wearable_config_set_defaults(wearable_config_t *out)
     out->long_press_ms = WEARABLE_DEFAULT_LONG_PRESS_MS;
     out->sequence_gap_ms = WEARABLE_DEFAULT_SEQUENCE_GAP_MS;
     out->simultaneous_window_ms = WEARABLE_DEFAULT_SIMULTANEOUS_WINDOW_MS;
-    out->mapping_count = 8;
+    out->mapping_count = 12;
 
     out->mappings[0] = (wearable_mapping_t){
         .enabled = true,
@@ -78,6 +78,30 @@ void wearable_config_set_defaults(wearable_config_t *out)
         .action = WEARABLE_ACTION_ENTER_PAIRING,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO,
                                         WEARABLE_PRIMITIVE_LONG)}},
+    };
+    out->mappings[8] = (wearable_mapping_t){
+        .enabled = true,
+        .action = WEARABLE_ACTION_FAST_FORWARD_START,
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_B,
+                                        WEARABLE_PRIMITIVE_LONG)}},
+    };
+    out->mappings[9] = (wearable_mapping_t){
+        .enabled = true,
+        .action = WEARABLE_ACTION_STOP,
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_B,
+                                        WEARABLE_PRIMITIVE_RELEASE)}},
+    };
+    out->mappings[10] = (wearable_mapping_t){
+        .enabled = true,
+        .action = WEARABLE_ACTION_FAST_REWIND_START,
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_A,
+                                        WEARABLE_PRIMITIVE_LONG)}},
+    };
+    out->mappings[11] = (wearable_mapping_t){
+        .enabled = true,
+        .action = WEARABLE_ACTION_STOP,
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_A,
+                                        WEARABLE_PRIMITIVE_RELEASE)}},
     };
 
     out->action_sounds[WEARABLE_ACTION_POINT_A] =

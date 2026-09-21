@@ -4,7 +4,7 @@
 
 #include "wearable_types.h"
 
-#define WEARABLE_CONFIG_SCHEMA_VERSION 5u
+#define WEARABLE_CONFIG_SCHEMA_VERSION 6u
 
 /* Calibrated from physical-button timing captures on the current enclosure. */
 #define WEARABLE_DEFAULT_MULTI_CLICK_GAP_MS 280u

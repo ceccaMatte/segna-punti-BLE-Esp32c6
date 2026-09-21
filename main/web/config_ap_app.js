@@ -1,9 +1,9 @@
-const PROTOCOL_VERSION = 5;
-const ACTIONS = ['Punto A', 'Punto B', 'Moment', 'Undo', 'VAR', 'Pairing'];
-const PAIRING_ACTION = 5;
+const PROTOCOL_VERSION = 6;
+const ACTIONS = ['Punto A', 'Punto B', 'Moment', 'Undo', 'VAR', 'Fast forward start', 'Fast rewind start', 'Stop', 'Pairing'];
+const PAIRING_ACTION = 8;
 const SOUND_ACTION_COUNT = 5;
 const BUTTONS = ['A', 'B', 'Moment', 'Undo'];
-const TYPES = ['Click', 'Doppio click', 'Triplo click', 'Pressione lunga'];
+const TYPES = ['Click', 'Doppio click', 'Triplo click', 'Pressione lunga', 'Rilascio dopo long'];
 const MAX_SEQUENCE = 8;
 const MAX_MAPPINGS = 16;
 const CONFIG_HEADER_SIZE = 11;
@@ -19,9 +19,9 @@ function diag(event, data) {
 function diagError(event, error) { console.error('[Playmaker][AP]', event, error); }
 function u16(dv, offset) { return dv.getUint16(offset, true); }
 function put16(dv, offset, value) { dv.setUint16(offset, Number(value), true); }
-function token(mask, type) { return ((type & 0x03) << 4) | (mask & 0x0f); }
+function token(mask, type) { return ((type & 0x07) << 4) | (mask & 0x0f); }
 function tokenMask(value) { return value & 0x0f; }
-function tokenType(value) { return (value >> 4) & 0x03; }
+function tokenType(value) { return (value >> 4) & 0x07; }
 
 function toast(message) {
   const el = $('toast'); el.textContent = message; el.classList.add('show');

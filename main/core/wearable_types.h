@@ -6,7 +6,7 @@
 
 #define WEARABLE_BUTTON_COUNT 4u
 #define WEARABLE_BUTTON_MASK_ALL ((uint8_t)((1u << WEARABLE_BUTTON_COUNT) - 1u))
-#define WEARABLE_PRIMITIVE_COUNT 4u
+#define WEARABLE_PRIMITIVE_COUNT 5u
 #define WEARABLE_MAX_SEQUENCE 8u
 #define WEARABLE_MAX_MAPPINGS 16u
 #define WEARABLE_ACTION_SOUND_COUNT 5u
@@ -25,6 +25,7 @@ typedef enum {
     WEARABLE_PRIMITIVE_DOUBLE = 1,
     WEARABLE_PRIMITIVE_TRIPLE = 2,
     WEARABLE_PRIMITIVE_LONG = 3,
+    WEARABLE_PRIMITIVE_RELEASE = 4,
 } wearable_primitive_t;
 
 typedef enum {
@@ -33,14 +34,17 @@ typedef enum {
     WEARABLE_ACTION_MOMENT = 2,
     WEARABLE_ACTION_UNDO = 3,
     WEARABLE_ACTION_VAR = 4,
-    WEARABLE_ACTION_ENTER_PAIRING = 5,
+    WEARABLE_ACTION_FAST_FORWARD_START = 5,
+    WEARABLE_ACTION_FAST_REWIND_START = 6,
+    WEARABLE_ACTION_STOP = 7,
+    WEARABLE_ACTION_ENTER_PAIRING = 8,
 } wearable_action_t;
 
 /*
  * Gesture token wire/storage layout (16 bit):
  *   bits 0..3 = button mask (A/B/Moment/Undo)
- *   bits 4..5 = wearable_primitive_t
- *   bits 6..15 reserved
+ *   bits 4..6 = wearable_primitive_t
+ *   bits 7..15 reserved
  *
  * The mask may contain 1..4 buttons for every primitive. This is what makes
  * combinations first-class citizens:
@@ -69,7 +73,7 @@ static inline uint8_t wearable_token_button_mask(wearable_token_t token)
 
 static inline wearable_primitive_t wearable_token_primitive(wearable_token_t token)
 {
-    return (wearable_primitive_t)((token >> 4) & 0x03u);
+    return (wearable_primitive_t)((token >> 4) & 0x07u);
 }
 
 static inline uint8_t wearable_popcount4(uint8_t value)
@@ -83,7 +87,7 @@ static inline uint8_t wearable_popcount4(uint8_t value)
 
 static inline bool wearable_token_is_valid(wearable_token_t token)
 {
-    if ((token & 0xFFC0u) != 0u) {
+    if ((token & 0xFF80u) != 0u) {
         return false;
     }
 

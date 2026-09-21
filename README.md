@@ -7,11 +7,11 @@ padel. Il punteggio autorevole vive nell'applicazione Playmaker.
 ## Funzioni
 
 - 4 pulsanti fisici: A, B, Moment, Undo
-- gesture configurabili: click, doppio click, triplo click, pressione lunga e
-  **pressione simultanea (chord)**
+- gesture configurabili: click, doppio click, triplo click, pressione lunga,
+  **rilascio dopo long** e combinazioni simultanee
 - sequenze di gesture configurabili e persistenti in NVS
-- mapping gesture -> POINT_A / POINT_B / MOMENT / UNDO / VAR / pairing
-- default: **Moment doppio click -> VAR** e **Undo long press -> pairing**
+- mapping gesture -> POINT_A / POINT_B / MOMENT / UNDO / VAR / FAST_FORWARD_START / FAST_REWIND_START / STOP / pairing
+- default: **Moment doppio click -> VAR**, **B long -> FAST_FORWARD_START**, **A long -> FAST_REWIND_START**, release dopo long -> **STOP**, **Undo long -> pairing**
 - BLE NimBLE con commissioning persistente e riconnessione lato Web Bluetooth
 - coda comandi con `session_id + sequence`, retry e ACK idempotenti
 - ACK con stato partita autorevole e transizioni GAME/SET/MATCH
@@ -54,15 +54,22 @@ A + CLICK                  -> POINT_A
 A+B + CLICK                -> UNDO
 A+B + DOUBLE               -> POINT_A
 MOMENT + DOUBLE            -> VAR
+B + LONG                    -> FAST_FORWARD_START
+B + RELEASE_AFTER_LONG      -> STOP
+A + LONG                    -> FAST_REWIND_START
+A + RELEASE_AFTER_LONG      -> STOP
 UNDO + LONG                 -> PAIRING
 ```
 
 La finestra `simultaneous_window_ms` (default 60 ms) indica quanto possono
 essere sfalsati i press iniziali per appartenere allo stesso gruppo. Lo stesso
 gruppo può poi essere classificato come click, doppio, triplo o long press.
+La pressione lunga viene emessa **mentre il pulsante è ancora premuto** appena
+supera la soglia. Se poi il gruppo viene rilasciato, viene emesso un secondo
+evento `RELEASE`: quindi LONG e RELEASE sono due eventi distinti.
 
-Il protocollo usa token a 16 bit: bit 0..3 = mask pulsanti, bit 4..5 = tipo
-(click/double/triple/long). Non esiste più una primitive CHORD separata.
+Il protocollo usa token a 16 bit: bit 0..3 = mask pulsanti, bit 4..6 = tipo
+(click/double/triple/long/release).
 
 ## Diagnostica
 
@@ -204,3 +211,24 @@ diventare il nuovo proprietario.
 Il firmware attuale usa un token applicativo Playmaker e non abilita il bonding
 SMP persistente di NimBLE; quindi non ci sono ulteriori chiavi BLE di sistema da
 cancellare sul wearable.
+
+
+## Navigazione VAR
+
+I comandi temporali sono stateless lato wearable:
+
+```text
+B LONG     -> FAST_FORWARD_START
+B RELEASE  -> STOP
+A LONG     -> FAST_REWIND_START
+A RELEASE  -> STOP
+```
+
+Il firmware emette LONG al superamento della soglia configurata (default 450 ms)
+senza attendere il rilascio. Il successivo RELEASE viene emesso solo per un
+gruppo che aveva già generato LONG.
+
+È stato inoltre corretto il race di debounce sul multi-click: se il secondo
+PRESS fisico inizia dentro la finestra del doppio click, il click singolo
+precedente non può più scadere durante i 25 ms di debounce. Quindi
+`Moment DOUBLE -> VAR` produce solo VAR e non `MOMENT + VAR`.

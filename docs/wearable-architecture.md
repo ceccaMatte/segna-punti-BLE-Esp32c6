@@ -4,7 +4,7 @@ Firmware dedicato al wearable Playmaker. Stack: ESP-IDF + NimBLE.
 
 ## Architettura
 
-- **button_manager**: debounce, raggruppamento simultaneo di 1–4 pulsanti e classificazione click/double/triple/long.
+- **button_manager**: debounce, raggruppamento simultaneo di 1–4 pulsanti e classificazione click/double/triple/long/release-after-long.
 - **gesture_engine**: sequenze configurabili con risoluzione dei prefissi.
 - **config_model**: default e validazione indipendenti da ESP-IDF.
 - **config_store**: persistenza NVS.
@@ -38,9 +38,16 @@ pulsanti che iniziano la pressione dentro la finestra formano un gruppo. Il
 gruppo viene poi classificato come CLICK, DOUBLE, TRIPLE o LONG.
 
 Il LONG scatta appena supera la soglia mentre tutti i pulsanti del gruppo sono
-ancora tenuti premuti; non è necessario rilasciarli.
+ancora tenuti premuti; non è necessario rilasciarli. Se quel gruppo viene poi
+rilasciato, il Button Manager emette anche `RELEASE`. Il RELEASE è quindi
+generato solo dopo un LONG già emesso e non dopo un click normale.
 
-Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`.
+Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`,
+`A RELEASE-after-LONG`.
+
+Il multi-click usa il timestamp del fronte RAW per decidere se il secondo press
+è iniziato dentro la finestra: il debounce non può più far scadere il primo
+click e produrre erroneamente `CLICK + DOUBLE`.
 
 ## Pinout prototipo volante attuale
 
@@ -71,7 +78,7 @@ charger non alimentato non sono distinguibili senza un segnale VBUS separato.
 
 ## Configurazione e schema NVS
 
-La schema version corrente è **5**. Il passaggio dai vecchi token a 8 bit ai
+La schema version corrente è **6**. Il passaggio dai vecchi token a 8 bit ai
 token v3 a 16 bit invalida intenzionalmente la configurazione NVS precedente:
 al primo boot vengono caricati e salvati i nuovi default.
 
@@ -84,6 +91,10 @@ Il default contiene:
 - A+B click -> UNDO
 - A+B doppio click -> POINT_A
 - Moment doppio click -> VAR
+- B long -> FAST_FORWARD_START
+- B release dopo long -> STOP
+- A long -> FAST_REWIND_START
+- A release dopo long -> STOP
 - Undo long -> pairing
 
 ## ACK autorevole
