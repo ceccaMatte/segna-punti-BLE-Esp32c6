@@ -113,10 +113,26 @@ console, così l'interfaccia resta pulita.
 
 ## Pairing
 
-Il token applicativo da 128 bit viene persistito in NVS. Il pairing fisico
-cancella prima la persistenza, notifica il vecchio client e poi disconnette.
-L'auto-reconnect del vecchio browser viene sospeso per evitare che reclami subito
-il wearable.
+Il token applicativo da 128 bit viene persistito in NVS.
+
+La gesture fisica di pairing porta il wearable in **virgin pairing mode**:
+cancella il token NVS/RAM precedente, azzera commissioning/autenticazione,
+svuota la coda ACTION, genera una nuova sessione e disconnette il client
+corrente. La finestra di pairing resta aperta per
+`CONFIG_WEARABLE_PAIRING_WINDOW_MS`.
+
+Per evitare che un vecchio browser in auto-reconnect monopolizzi l'unica
+connessione BLE, ogni connessione non autenticata durante virgin pairing deve
+inviare `CLAIM` entro 5 secondi; altrimenti viene terminata e l'advertising
+riparte.
+
+Sul client Web Bluetooth lo stato `commissioned=0 + pairingOpen=1` cancella
+immediatamente il token locale e disabilita l'auto-reconnect. Un nuovo CLAIM è
+permesso solo dopo un'azione esplicita **Connetti / Pair**, che genera sempre un
+token nuovo invece di riutilizzare quello precedente.
+
+Non è attivo il bonding SMP persistente NimBLE: l'associazione persistente è il
+token applicativo Playmaker.
 
 ## Robustezza
 

@@ -35,6 +35,7 @@
 #define RETRY_SLOW_MS 5000u
 #define RETRY_FAST_COUNT 5u
 #define MAX_SEND_ATTEMPTS 10u
+#define PAIRING_CLAIM_TIMEOUT_MS 5000u
 
 static const char *TAG = "ble_manager";
 
@@ -83,6 +84,7 @@ static bool s_commissioned;
 
 static uint8_t s_pair_token[WEARABLE_TOKEN_LEN];
 static int64_t s_pairing_until_ms;
+static int64_t s_unauth_connected_since_ms;
 static bool s_last_pairing_open;
 static uint8_t s_own_addr_type;
 static char s_name[24];
@@ -298,7 +300,10 @@ static int handle_control_write(struct ble_gatt_access_ctxt *ctxt)
         s_commissioned = true;
         s_authenticated = true;
         s_pairing_until_ms = 0;
+        s_unauth_connected_since_ms = 0;
 
+        ESP_LOGW(TAG,
+                 "PAIRING CLAIM accepted: new browser/device is now the owner");
         notify_status();
         app_event(BLE_APP_PAIRING_SUCCESS);
 
@@ -318,6 +323,7 @@ static int handle_control_write(struct ble_gatt_access_ctxt *ctxt)
         }
 
         s_authenticated = true;
+        s_unauth_connected_since_ms = 0;
         notify_status();
 
         xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -626,6 +632,17 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             s_authenticated = false;
             s_action_subscribed = false;
             s_status_subscribed = false;
+            s_unauth_connected_since_ms =
+                (!s_commissioned && pairing_open())
+                    ? now_ms64()
+                    : 0;
+
+            if (s_unauth_connected_since_ms != 0) {
+                ESP_LOGI(TAG,
+                         "pairing candidate connected; CLAIM required within %u ms",
+                         (unsigned)PAIRING_CLAIM_TIMEOUT_MS);
+            }
+
             app_event(BLE_APP_CONNECTED);
         } else {
             advertise();
@@ -637,6 +654,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_authenticated = false;
         s_action_subscribed = false;
         s_status_subscribed = false;
+        s_unauth_connected_since_ms = 0;
         app_event(BLE_APP_DISCONNECTED);
         advertise();
         return 0;
@@ -716,6 +734,20 @@ static void retry_task(void *arg)
         }
 
         bool action_failed = false;
+        bool pairing_claim_timed_out = false;
+        uint16_t pairing_timeout_conn = BLE_HS_CONN_HANDLE_NONE;
+
+        if (!s_commissioned &&
+            open &&
+            !s_authenticated &&
+            s_conn_handle != BLE_HS_CONN_HANDLE_NONE &&
+            s_unauth_connected_since_ms > 0 &&
+            now_ms64() - s_unauth_connected_since_ms >=
+                PAIRING_CLAIM_TIMEOUT_MS) {
+            pairing_claim_timed_out = true;
+            pairing_timeout_conn = s_conn_handle;
+            s_unauth_connected_since_ms = 0;
+        }
 
         xSemaphoreTake(s_lock, portMAX_DELAY);
 
@@ -749,6 +781,14 @@ static void retry_task(void *arg)
 
         if (action_failed) {
             app_event(BLE_APP_ACTION_FAILED);
+        }
+
+        if (pairing_claim_timed_out &&
+            pairing_timeout_conn != BLE_HS_CONN_HANDLE_NONE) {
+            ESP_LOGW(TAG,
+                     "pairing candidate did not CLAIM in time; disconnecting so another device can connect");
+            ble_gap_terminate(pairing_timeout_conn,
+                              BLE_ERR_REM_USER_CONN_TERM);
         }
 
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -890,11 +930,22 @@ bool ble_manager_enter_pairing(void)
         return false;
     }
 
+    ESP_LOGW(TAG, "============================================================");
+    ESP_LOGW(TAG, "=============  PAIRING RESET / VIRGIN MODE  ===============");
+    ESP_LOGW(TAG, "old application credential will be erased");
+    ESP_LOGW(TAG, "current BLE client will be disconnected");
+    ESP_LOGW(TAG, "new clients may CLAIM the wearable for %u ms",
+             (unsigned)CONFIG_WEARABLE_PAIRING_WINDOW_MS);
+    ESP_LOGW(TAG, "============================================================");
+
     /*
-     * Persistence is the source of truth. If NVS cannot forget the old token,
-     * do not pretend that the device entered pairing only in RAM.
+     * The application token in NVS is the association credential. Pairing
+     * reset is only considered successful if the persisted credential is
+     * actually gone.
      */
     if (!config_store_clear_pairing_token()) {
+        ESP_LOGE(TAG,
+                 "PAIRING RESET FAILED: could not erase old NVS credential");
         return false;
     }
 
@@ -904,25 +955,50 @@ bool ble_manager_enter_pairing(void)
     s_pairing_until_ms =
         now_ms64() +
         CONFIG_WEARABLE_PAIRING_WINDOW_MS;
+    s_unauth_connected_since_ms = 0;
     s_last_pairing_open = true;
 
+    /*
+     * A new pairing starts a clean transport session as well. Pending commands
+     * from the previous owner must never leak to the new owner.
+     */
     xSemaphoreTake(s_lock, portMAX_DELAY);
     s_q_head = 0;
     s_q_count = 0;
+    s_next_sequence = 1;
+    s_session_id = esp_random();
+    if (s_session_id == 0u) {
+        s_session_id = 1u;
+    }
     xSemaphoreGive(s_lock);
 
     /*
-     * Notify the old client before disconnecting. The configuration page uses
-     * this notification to stop auto-reconnect, otherwise it could instantly
-     * reclaim the wearable and prevent a new phone/browser from pairing.
+     * Best-effort notification for the old Playmaker page. Correctness does
+     * not depend on it: the firmware disconnects the client anyway, and an
+     * unauthenticated connection in virgin pairing mode is evicted if it does
+     * not CLAIM within PAIRING_CLAIM_TIMEOUT_MS.
      */
     notify_status();
 
     if (s_conn_handle != BLE_HS_CONN_HANDLE_NONE) {
-        ble_gap_terminate(s_conn_handle,
-                          BLE_ERR_REM_USER_CONN_TERM);
+        const uint16_t old_conn = s_conn_handle;
+        ESP_LOGW(TAG,
+                 "disconnecting previous BLE client handle=%u",
+                 (unsigned)old_conn);
+        const int rc = ble_gap_terminate(old_conn,
+                                         BLE_ERR_REM_USER_CONN_TERM);
+        if (rc != 0) {
+            ESP_LOGW(TAG,
+                     "previous client disconnect request returned rc=%d",
+                     rc);
+        }
+    } else {
+        ESP_LOGI(TAG,
+                 "no BLE client connected; wearable is already advertising for a new owner");
     }
 
+    ESP_LOGW(TAG,
+             "PAIRING RESET COMPLETE: commissioned=0 authenticated=0 pairing_open=1");
     return true;
 }
 

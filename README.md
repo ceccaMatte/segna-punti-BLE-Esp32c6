@@ -176,3 +176,31 @@ riconnessi normalmente.
 Nel monitor seriale i passaggi sono evidenziati dai banner
 `ENTERING DEEP SLEEP` e `WAKE FROM DEEP SLEEP`, incluso il GPIO/pulsante che
 ha causato il wake.
+
+
+## Pairing vergine / cambio dispositivo
+
+La gesture di pairing non è più un semplice "riapri pairing": esegue un vero
+**reset dell'associazione applicativa**.
+
+Quando viene lanciata:
+
+- cancella da NVS il token del precedente proprietario;
+- cancella il token anche dalla RAM;
+- azzera autenticazione e commissioning;
+- scarta eventuali ACTION ancora in coda e crea una nuova sessione;
+- disconnette forzatamente il client BLE corrente;
+- apre la finestra di pairing per un nuovo dispositivo.
+
+Durante questa fase un client che si connette ma non invia un nuovo `CLAIM`
+entro 5 secondi viene disconnesso, così un vecchio computer in auto-reconnect non
+può occupare indefinitamente l'unico slot BLE.
+
+La pagina Web Bluetooth, quando vede il wearable non commissioned con pairing
+aperto, cancella il proprio token locale e blocca l'auto-reconnect. Solo il
+pulsante esplicito **Connetti / Pair** può generare un nuovo token casuale e
+diventare il nuovo proprietario.
+
+Il firmware attuale usa un token applicativo Playmaker e non abilita il bonding
+SMP persistente di NimBLE; quindi non ci sono ulteriori chiavi BLE di sistema da
+cancellare sul wearable.

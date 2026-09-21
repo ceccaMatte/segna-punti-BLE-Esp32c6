@@ -103,6 +103,7 @@ function randomToken(){const v=new Uint8Array(16);crypto.getRandomValues(v);retu
 function tokenKey(){return device?`playmaker-token:${device.id}`:''}
 function loadToken(){const raw=localStorage.getItem(tokenKey());if(!raw)return null;const v=raw.split(',').map(Number);return v.length===16?new Uint8Array(v):null}
 function saveToken(t){localStorage.setItem(tokenKey(),Array.from(t).join(','))}
+function forgetToken(){const key=tokenKey();if(key)localStorage.removeItem(key)}
 function controlPacket(op,t){const out=new Uint8Array(17);out[0]=op;out.set(t,1);return out}
 async function writeChar(ch,bytes){diag('GATT write',{uuid:ch.uuid,bytes:Array.from(bytes)});return ch.writeValueWithResponse?ch.writeValueWithResponse(bytes):ch.writeValue(bytes)}
 function decodeStatus(dv){
@@ -111,19 +112,59 @@ function decodeStatus(dv){
 }
 function paintStatus(s){$('commissioned').textContent=s.commissioned?'Sì':'No';$('authenticated').textContent=s.authenticated?'Sì':'No';$('pairingOpen').textContent=s.pairingOpen?'Aperto':'Chiuso'}
 async function readStatus(){const s=decodeStatus(await chars.status.readValue());paintStatus(s);diag('status',s);return s}
-function onStatusNotification(ev){try{const s=decodeStatus(ev.target.value);paintStatus(s);if(!s.commissioned&&s.pairingOpen){suppressReconnect=true;clearTimeout(reconnectTimer);if(device)localStorage.removeItem(tokenKey());eventText('Pairing fisico aperto: vecchia associazione invalidata.')}}catch(e){err('status notify',e)}}
+function onStatusNotification(ev){try{
+  const s=decodeStatus(ev.target.value);paintStatus(s);
+  if(!s.commissioned&&s.pairingOpen){
+    suppressReconnect=true;
+    clearTimeout(reconnectTimer);
+    reconnectTimer=null;
+    forgetToken();
+    eventText('Pairing reset: credenziali locali dimenticate. Wearable libero per una nuova associazione.');
+    if(device?.gatt?.connected)device.gatt.disconnect();
+  }
+}catch(e){err('status notify',e)}}
 async function authenticateOrClaim(allowClaim){
-  const s=await readStatus();let token=loadToken();
+  const s=await readStatus();
+  let token=loadToken();
+
   if(s.commissioned){
-    if(!token)throw new Error('Wearable già associato: esegui prima la gesture fisica di Pairing.');
+    if(!token){
+      suppressReconnect=true;
+      if(device?.gatt?.connected)device.gatt.disconnect();
+      throw new Error('Wearable associato a un altro client: esegui la gesture fisica di Pairing.');
+    }
     await writeChar(chars.control,controlPacket(0x02,token));
   }else{
-    if(!s.pairingOpen)throw new Error('Pairing chiuso: esegui la gesture fisica di Pairing.');
-    if(!allowClaim)throw new Error('Pairing aperto: usa Connetti / Pair.');
-    if(!token){token=randomToken();saveToken(token)}
+    if(!s.pairingOpen){
+      suppressReconnect=true;
+      if(device?.gatt?.connected)device.gatt.disconnect();
+      throw new Error('Pairing chiuso: esegui la gesture fisica di Pairing.');
+    }
+
+    /*
+     * Virgin pairing: any credential previously cached by this browser is
+     * deliberately discarded. Auto-reconnect is never allowed to reclaim an
+     * uncommissioned wearable; only an explicit Connetti / Pair user action
+     * can generate a fresh owner token.
+     */
+    forgetToken();
+
+    if(!allowClaim){
+      suppressReconnect=true;
+      clearTimeout(reconnectTimer);
+      reconnectTimer=null;
+      if(device?.gatt?.connected)device.gatt.disconnect();
+      throw new Error('Wearable in pairing vergine: usa Connetti / Pair per creare una nuova associazione.');
+    }
+
+    token=randomToken();
+    saveToken(token);
+    diag('fresh pairing token generated');
     await writeChar(chars.control,controlPacket(0x01,token));
   }
-  const after=await readStatus();if(!after.authenticated)throw new Error('Autenticazione fallita.');
+
+  const after=await readStatus();
+  if(!after.authenticated)throw new Error('Autenticazione fallita.');
 }
 async function connectDevice(target,{allowClaim=false}={}){
   clearTimeout(reconnectTimer);device=target;device.removeEventListener('gattserverdisconnected',onDisconnected);device.addEventListener('gattserverdisconnected',onDisconnected);
@@ -134,7 +175,7 @@ async function connectDevice(target,{allowClaim=false}={}){
   await chars.action.startNotifications();chars.action.addEventListener('characteristicvaluechanged',onAction);
   await authenticateOrClaim(allowClaim);reconnectAttempt=0;suppressReconnect=false;setBle(device.name,true);eventText('BLE autenticato: '+device.name);
 }
-async function requestConnect(){const target=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}]});await connectDevice(target,{allowClaim:true})}
+async function requestConnect(){suppressReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;const target=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}]});await connectDevice(target,{allowClaim:true})}
 async function findGrantedDevice(){if(!navigator.bluetooth.getDevices)return null;const ds=await navigator.bluetooth.getDevices();return ds.find(d=>d.name?.startsWith('PLAYMAKER_'))??null}
 async function autoReconnect(){if(suppressReconnect)return false;try{const d=device??await findGrantedDevice();if(!d)return false;await connectDevice(d,{allowClaim:false});return true}catch(e){err('reconnect',e);setBle(e.message);return false}}
 function onDisconnected(){setBle('Disconnesso');if(suppressReconnect)return;const delay=RETRY_MS[Math.min(reconnectAttempt++,RETRY_MS.length-1)];reconnectTimer=setTimeout(async()=>{if(!(await autoReconnect()))onDisconnected()},delay)}
@@ -158,7 +199,7 @@ $('manualA').onclick=()=>{const r=applyAction(ACTION.POINT_A);eventText('Punto A
 $('manualB').onclick=()=>{const r=applyAction(ACTION.POINT_B);eventText('Punto B manuale · flags 0x'+r.flags.toString(16))};
 $('manualUndo').onclick=()=>{const r=applyAction(ACTION.UNDO);eventText(r.status===ACK.OK?'Undo manuale':'Niente da annullare')};
 $('resetMatch').onclick=()=>{state=freshState();history=[];ackCache.clear();render();eventText('Nuova partita')};
-$('clearBrowserToken').onclick=()=>{if(device)localStorage.removeItem(tokenKey());eventText('Token locale eliminato. Per riassociare serve la gesture fisica Pairing.')};
+$('clearBrowserToken').onclick=()=>{forgetToken();suppressReconnect=true;eventText('Token locale eliminato. Per riassociare serve la gesture fisica Pairing.')};
 
 window.addEventListener('load',()=>{
   render();
