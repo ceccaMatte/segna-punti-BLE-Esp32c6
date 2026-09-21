@@ -25,6 +25,7 @@ typedef struct {
     bool collecting;
     bool finalized;
     bool long_emitted;
+    bool multi_started_in_time;
     uint8_t mask;
     uint32_t first_press_ms;
     uint32_t collect_deadline_ms;
@@ -154,11 +155,19 @@ static void flush_clicks(void)
 
 static void register_short_cycle(uint8_t mask,
                                  uint32_t now,
-                                 uint16_t multi_click_gap_ms)
+                                 uint16_t multi_click_gap_ms,
+                                 bool started_in_time)
 {
+    /*
+     * The multi-click gap is defined from RELEASE(n) to PRESS(n+1), not to
+     * RELEASE(n+1). Once the next press starts inside the window we must keep
+     * the series alive while that press is held; otherwise a slightly slower
+     * third click is incorrectly emitted as DOUBLE + CLICK.
+     */
     if (s_clicks.count != 0u &&
         (s_clicks.mask != mask ||
-         (int32_t)(now - s_clicks.deadline_ms) >= 0)) {
+         (!started_in_time &&
+          (int32_t)(now - s_clicks.deadline_ms) >= 0))) {
         flush_clicks();
     }
 
@@ -177,7 +186,7 @@ static void register_short_cycle(uint8_t mask,
     s_clicks.deadline_ms = now + multi_click_gap_ms;
 
     ESP_LOGD(TAG,
-             "short cycle mask=0x%02x count=%u deadline=%lu",
+             "short cycle mask=0x%02x count=%u next_press_deadline=%lu",
              (unsigned)mask,
              (unsigned)s_clicks.count,
              (unsigned long)s_clicks.deadline_ms);
@@ -194,11 +203,16 @@ static void start_or_extend_group(uint8_t button,
         s_group.mask = bit;
         s_group.first_press_ms = now;
         s_group.collect_deadline_ms = now + simultaneous_window_ms;
+        s_group.multi_started_in_time =
+            s_clicks.count != 0u &&
+            (int32_t)(now - s_clicks.deadline_ms) < 0;
 
         ESP_LOGD(TAG,
-                 "group open mask=0x%02x window=%u ms",
+                 "group open mask=0x%02x window=%u ms multi_pending=%u started_in_time=%d",
                  (unsigned)s_group.mask,
-                 (unsigned)simultaneous_window_ms);
+                 (unsigned)simultaneous_window_ms,
+                 (unsigned)s_clicks.count,
+                 (int)s_group.multi_started_in_time);
         return;
     }
 
@@ -265,7 +279,8 @@ static void process_finalized_group(uint32_t now,
     if (!s_group.long_emitted) {
         register_short_cycle(mask,
                              now,
-                             multi_click_gap_ms);
+                             multi_click_gap_ms,
+                             s_group.multi_started_in_time);
     }
 
     ESP_LOGD(TAG,
@@ -349,7 +364,13 @@ static void button_task(void *arg)
 
         if (s_clicks.count != 0u &&
             (int32_t)(now - s_clicks.deadline_ms) >= 0) {
-            flush_clicks();
+            const bool next_press_started_in_time =
+                (s_group.collecting || s_group.finalized) &&
+                s_group.multi_started_in_time;
+
+            if (!next_press_started_in_time) {
+                flush_clicks();
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
