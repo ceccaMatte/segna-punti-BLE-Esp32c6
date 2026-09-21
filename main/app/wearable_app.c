@@ -105,7 +105,7 @@ static void on_action(wearable_action_t action,
 {
     (void)ctx;
 
-    ESP_LOGI(TAG, "action requested=%u", (unsigned)action);
+    ESP_LOGD(TAG, "gesture action callback=%u", (unsigned)action);
 
     if (action == WEARABLE_ACTION_ENTER_PAIRING) {
         if (ble_manager_enter_pairing()) {

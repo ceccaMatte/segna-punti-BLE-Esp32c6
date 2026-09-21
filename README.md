@@ -232,3 +232,22 @@ gruppo che aveva già generato LONG.
 PRESS fisico inizia dentro la finestra del doppio click, il click singolo
 precedente non può più scadere durante i 25 ms di debounce. Quindi
 `Moment DOUBLE -> VAR` produce solo VAR e non `MOMENT + VAR`.
+
+
+## Log gesture semplificato
+
+I log di interazione utente a livello INFO mostrano ora direttamente l'evento
+riconosciuto e il comando risultante, senza timestamp di pressione o dettagli
+di debounce. Esempi:
+
+```text
+I gesture: EVENT: A CLICK  =>  COMMAND: POINT_A
+I gesture: EVENT: MOMENT DOUBLE_CLICK  =>  COMMAND: VAR
+I gesture: EVENT: B LONG_PRESS  =>  COMMAND: FAST_FORWARD_START
+I gesture: EVENT: B RELEASE_AFTER_LONG  =>  COMMAND: STOP
+I gesture: EVENT: A LONG_PRESS  =>  COMMAND: FAST_REWIND_START
+I gesture: EVENT: UNDO LONG_PRESS  =>  COMMAND: PAIRING
+```
+
+I dettagli RAW/debounce rimangono disponibili a livello DEBUG per eventuali
+problemi hardware, ma non sporcano il monitor seriale normale.

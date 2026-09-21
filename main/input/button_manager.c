@@ -122,8 +122,8 @@ static void emit_token(wearable_token_t token)
         return;
     }
 
-    ESP_LOGI(TAG,
-             "---[EMIT]--- type=%s mask=0x%02x token=0x%04x",
+    ESP_LOGD(TAG,
+             "primitive type=%s mask=0x%02x token=0x%04x",
              primitive_name(wearable_token_primitive(token)),
              (unsigned)wearable_token_button_mask(token),
              (unsigned)token);
@@ -267,7 +267,7 @@ static void finalize_group_if_due(uint32_t now)
         s_group.multi_started_in_time = false;
     }
 
-    ESP_LOGI(TAG,
+    ESP_LOGD(TAG,
              "group finalized mask=0x%02x buttons=%u",
              (unsigned)s_group.mask,
              (unsigned)wearable_popcount4(s_group.mask));
@@ -315,10 +315,9 @@ static void process_finalized_group(uint32_t now,
         emit_mask(s_group.mask, WEARABLE_PRIMITIVE_LONG);
         s_group.long_emitted = true;
 
-        ESP_LOGI(TAG,
-                 "long group mask=0x%02x held=%lu ms",
-                 (unsigned)s_group.mask,
-                 (unsigned long)held_ms);
+        ESP_LOGD(TAG,
+                 "long group mask=0x%02x",
+                 (unsigned)s_group.mask);
     }
 
     if (pressed != 0u) {
@@ -339,10 +338,9 @@ static void process_finalized_group(uint32_t now,
          * is released.
          */
         emit_mask(mask, WEARABLE_PRIMITIVE_RELEASE);
-        ESP_LOGI(TAG,
-                 "release-after-long mask=0x%02x held=%lu ms",
-                 (unsigned)mask,
-                 (unsigned long)held_ms);
+        ESP_LOGD(TAG,
+                 "release-after-long mask=0x%02x",
+                 (unsigned)mask);
     }
 
     ESP_LOGD(TAG,
@@ -375,13 +373,12 @@ static void button_task(void *arg)
                 state->raw = raw;
                 state->raw_since = now;
 
-                ESP_LOGI(TAG,
-                         "RAW button=%s gpio=%d edge=%s level=%d t_us=%lld",
+                ESP_LOGD(TAG,
+                         "raw button=%s gpio=%d edge=%s level=%d",
                          button_name(i),
                          s_pins[i],
                          raw ? "PRESS" : "RELEASE",
-                         gpio_get_level((gpio_num_t)s_pins[i]),
-                         (long long)esp_timer_get_time());
+                         gpio_get_level((gpio_num_t)s_pins[i]));
             }
 
             if (raw != state->stable &&
@@ -394,13 +391,9 @@ static void button_task(void *arg)
                     state->pressed_at_us = edge_us;
                     sleep_manager_note_button_activity();
 
-                    ESP_LOGI(TAG,
-                             "TIMING button=%s gpio=%d edge=PRESS t_us=%lld t_ms=%lld debounce_ms=%u",
-                             button_name(i),
-                             s_pins[i],
-                             (long long)edge_us,
-                             (long long)(edge_us / 1000),
-                             (unsigned)DEBOUNCE_MS);
+                    ESP_LOGD(TAG,
+                             "debounced button=%s edge=PRESS",
+                             button_name(i));
 
                     start_or_extend_group(i,
                                           now,
@@ -411,15 +404,9 @@ static void button_task(void *arg)
                             ? edge_us - state->pressed_at_us
                             : 0;
 
-                    ESP_LOGI(TAG,
-                             "TIMING button=%s gpio=%d edge=RELEASE t_us=%lld t_ms=%lld held_us=%lld held_ms=%.3f debounce_ms=%u",
-                             button_name(i),
-                             s_pins[i],
-                             (long long)edge_us,
-                             (long long)(edge_us / 1000),
-                             (long long)held_us,
-                             (double)held_us / 1000.0,
-                             (unsigned)DEBOUNCE_MS);
+                    ESP_LOGD(TAG,
+                             "debounced button=%s edge=RELEASE",
+                             button_name(i));
                 }
             }
         }
@@ -500,7 +487,7 @@ esp_err_t button_manager_start(const wearable_config_t *config,
         s_state[i].pressed_at_us =
             s_state[i].stable ? esp_timer_get_time() : 0;
 
-        ESP_LOGI(TAG,
+        ESP_LOGD(TAG,
                  "button=%s gpio=%d initial=%s level=%d",
                  button_name(i),
                  s_pins[i],
@@ -532,7 +519,7 @@ void button_manager_update_config(const wearable_config_t *config)
     s_simultaneous_window_ms = config->simultaneous_window_ms;
     portEXIT_CRITICAL(&s_timing_lock);
 
-    ESP_LOGI(TAG,
+    ESP_LOGD(TAG,
              "timings debounce=%u poll=%u multi=%u long=%u simultaneous=%u ms",
              (unsigned)DEBOUNCE_MS,
              (unsigned)POLL_MS,
