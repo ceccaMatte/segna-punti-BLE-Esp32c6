@@ -41,6 +41,38 @@ bool config_store_load(wearable_config_t *out)
     esp_err_t err = nvs_get_blob(h, KEY_CFG, out, &len);
     nvs_close(h);
 
+    if (err == ESP_OK &&
+        len == sizeof(*out) &&
+        out->schema_version == 3u) {
+        /*
+         * Schema 4 keeps the same wire/storage layout as schema 3. Migrate
+         * in-place so user-programmed mappings/sounds survive while the
+         * calibrated recognition timings become active automatically.
+         */
+        out->schema_version = WEARABLE_CONFIG_SCHEMA_VERSION;
+        out->multi_click_gap_ms = WEARABLE_DEFAULT_MULTI_CLICK_GAP_MS;
+        out->long_press_ms = WEARABLE_DEFAULT_LONG_PRESS_MS;
+        out->sequence_gap_ms = WEARABLE_DEFAULT_SEQUENCE_GAP_MS;
+        out->simultaneous_window_ms =
+            WEARABLE_DEFAULT_SIMULTANEOUS_WINDOW_MS;
+
+        if (wearable_config_is_valid(out)) {
+            ESP_LOGI(TAG,
+                     "migrating config schema=3->%u with calibrated timings multi=%u long=%u sequence=%u simultaneous=%u",
+                     (unsigned)WEARABLE_CONFIG_SCHEMA_VERSION,
+                     (unsigned)out->multi_click_gap_ms,
+                     (unsigned)out->long_press_ms,
+                     (unsigned)out->sequence_gap_ms,
+                     (unsigned)out->simultaneous_window_ms);
+
+            if (!config_store_save(out)) {
+                ESP_LOGW(TAG,
+                         "migrated config active in RAM but NVS save failed");
+            }
+            return true;
+        }
+    }
+
     if (err != ESP_OK || len != sizeof(*out) || !wearable_config_is_valid(out)) {
         ESP_LOGW(TAG,
                  "stored config invalid/old schema err=%s len=%u; using defaults",
