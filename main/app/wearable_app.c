@@ -1,6 +1,7 @@
 #include "wearable_app.h"
 
 #include "ble_manager.h"
+#include "board_io.h"
 #include "button_manager.h"
 #include "config_store.h"
 #include "config_runtime.h"
@@ -155,7 +156,12 @@ static void gesture_tick_task(void *arg)
 
 esp_err_t wearable_app_start(void)
 {
-    esp_err_t err = config_store_init();
+    esp_err_t err = board_io_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = config_store_init();
     if (err != ESP_OK) {
         return err;
     }

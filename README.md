@@ -96,14 +96,19 @@ test/host/      test della parte C indipendente da ESP-IDF
 Il vecchio codice ESP32-C6 relativo a display, motore punteggio, UI e scoreboard
 è stato intenzionalmente rimosso da questo branch.
 
-## Hardware attuale
+## Hardware attuale — prototipo volante
 
-- BTN_A: GPIO3
-- BTN_B: GPIO1
-- BTN_Moment: GPIO0
-- BTN_UNDO: GPIO5
-- buzzer: GPIO20
+- BTN_B: **GPIO0**, input con pull-up interno, active-low
+- BTN_Moment: **GPIO1**, input con pull-up interno, active-low
+- BTN_A: **GPIO2**, input con pull-up interno, active-low
+- BTN_UNDO: **GPIO3**, input con pull-up interno, active-low
+- GPIO20: **input**
+- GPIO21: mantenuto **LOW** come ritorno di massa logica del prototipo
+- buzzer: **GPIO5** riservato; sul prototipo attuale il buzzer non è montato
 - MCP73831 `battery_state` / STAT divider: GPIO4 / ADC1_CH4
+
+GPIO21 viene usato come sink LOW solo per segnali a corrente molto bassa del
+prototipo; non va trattato come una vera massa di potenza.
 
 Vedi `docs/wearable-architecture.md` per i dettagli hardware e
 `docs/ble-protocol.md` per il contratto con l'app.

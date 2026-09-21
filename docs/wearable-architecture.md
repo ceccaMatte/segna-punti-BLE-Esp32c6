@@ -42,20 +42,22 @@ ancora tenuti premuti; non è necessario rilasciarli.
 
 Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`.
 
-## Pinout PCB attuale
+## Pinout prototipo volante attuale
 
-| Funzione | ESP32-C3 GPIO | Note |
+| Funzione | ESP32-C3 GPIO | Configurazione |
 | --- | ---: | --- |
-| BTN_A | GPIO3 | active-low, pull-up esterno 100 kΩ |
-| BTN_B | GPIO1 | active-low, pull-up esterno 100 kΩ |
-| BTN_Moment | GPIO0 | active-low, pull-up esterno 100 kΩ |
-| BTN_UNDO | GPIO5 | active-low, pull-up esterno 100 kΩ |
-| Buzzer | GPIO20 | PWM/LEDC |
+| BTN_B | GPIO0 | input, pull-up interno, active-low |
+| BTN_Moment | GPIO1 | input, pull-up interno, active-low |
+| BTN_A | GPIO2 | input, pull-up interno, active-low |
+| BTN_UNDO | GPIO3 | input, pull-up interno, active-low |
 | battery_state | GPIO4 | MCP73831 STAT via partitore, ADC1_CH4 |
-| 3V3 | 3V3 | alimentazione logica |
-| +5V | 5V | ingresso 5 V SuperMini |
+| Buzzer | GPIO5 | riservato; non montato sul prototipo |
+| AUX | GPIO20 | input, nessun pull |
+| ritorno logico prototipo | GPIO21 | output mantenuto LOW |
 
-GPIO20 coincide con U0RXD; la console di sviluppo usa USB Serial/JTAG.
+La console di sviluppo resta su USB Serial/JTAG. GPIO20/21 non vengono usati
+dalla UART di debug. GPIO21 è usato come ritorno LOW solo per piccoli segnali
+del prototipo e non come massa di alimentazione.
 
 `battery_state` è STAT, non Vbat. Con il partitore 100k/100k legge circa
 0 V con STAT LOW e circa 2,5 V con STAT HIGH. Con il circuito attuale STAT LOW e

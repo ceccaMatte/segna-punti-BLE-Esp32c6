@@ -2,8 +2,9 @@
 CONFIG_IDF_TARGET="esp32c3"
 CONFIG_IDF_TARGET_ESP32C3=y
 
-# The PCB uses GPIO20 for the buzzer. On ESP32-C3 GPIO20 is also U0RXD, so
-# keep the console on the native USB Serial/JTAG interface and leave UART0 free.
+# Flying prototype: GPIO20 is reserved as input and GPIO21 is held LOW.
+# Keep the console on the native USB Serial/JTAG interface so UART0 pins are
+# not needed for logging. The unmounted buzzer is reserved on GPIO5.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
 CONFIG_BT_ENABLED=y

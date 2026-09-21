@@ -2,23 +2,41 @@ menu "Playmaker wearable"
 
 config WEARABLE_BUTTON_A_GPIO
     int "Physical A button GPIO"
-    default 3
+    default 2
 config WEARABLE_BUTTON_B_GPIO
     int "Physical B button GPIO"
-    default 1
+    default 0
 config WEARABLE_BUTTON_MOMENT_GPIO
     int "Physical Moment button GPIO"
-    default 0
+    default 1
 config WEARABLE_BUTTON_UNDO_GPIO
     int "Physical Undo button GPIO"
-    default 5
+    default 3
 config WEARABLE_BUTTON_ACTIVE_LOW
     bool "Buttons are active low"
     default y
 
+config WEARABLE_AUX_INPUT_GPIO
+    int "Prototype auxiliary input GPIO"
+    default 20
+    help
+        Flying-prototype wiring: GPIO20 must remain an input.
+
+config WEARABLE_GND_SINK_GPIO
+    int "Prototype low/ground sink GPIO"
+    default 21
+    help
+        Flying-prototype wiring uses GPIO21 as a logic-low/common return.
+        The firmware configures it as an output and holds it LOW.
+        This is only suitable for very small signal currents, not as a power ground.
+
 config WEARABLE_BUZZER_GPIO
     int "Passive buzzer GPIO"
-    default 20
+    default 5
+    help
+        The current flying prototype has no buzzer mounted. GPIO5 is reserved
+        for the buzzer so the firmware can still build and the pinout remains
+        ready for a later buzzer connection.
 
 config WEARABLE_CHARGE_LED_GPIO
     int "Charge status LED GPIO (-1 disables)"
