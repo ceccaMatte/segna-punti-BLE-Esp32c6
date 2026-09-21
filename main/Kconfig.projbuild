@@ -1,42 +1,8 @@
 menu "Playmaker wearable"
 
-config WEARABLE_BUTTON_A_GPIO
-    int "Physical A button GPIO"
-    default 2
-config WEARABLE_BUTTON_B_GPIO
-    int "Physical B button GPIO"
-    default 0
-config WEARABLE_BUTTON_MOMENT_GPIO
-    int "Physical Moment button GPIO"
-    default 1
-config WEARABLE_BUTTON_UNDO_GPIO
-    int "Physical Undo button GPIO"
-    default 3
 config WEARABLE_BUTTON_ACTIVE_LOW
     bool "Buttons are active low"
     default y
-
-config WEARABLE_AUX_INPUT_GPIO
-    int "Prototype auxiliary input GPIO"
-    default 20
-    help
-        Flying-prototype wiring: GPIO20 must remain an input.
-
-config WEARABLE_GND_SINK_GPIO
-    int "Prototype low/ground sink GPIO"
-    default 21
-    help
-        Flying-prototype wiring uses GPIO21 as a logic-low/common return.
-        The firmware configures it as an output and holds it LOW.
-        This is only suitable for very small signal currents, not as a power ground.
-
-config WEARABLE_BUZZER_GPIO
-    int "Passive buzzer GPIO"
-    default 5
-    help
-        The current flying prototype has no buzzer mounted. GPIO5 is reserved
-        for the buzzer so the firmware can still build and the pinout remains
-        ready for a later buzzer connection.
 
 config WEARABLE_CHARGE_LED_GPIO
     int "Charge status LED GPIO (-1 disables)"
@@ -47,8 +13,7 @@ config WEARABLE_CHARGER_STAT_ADC_CHANNEL
     range 0 4
     default 4
     help
-        PCB: MCP73831 STAT -> 100k -> battery_state -> 100k -> GND,
-        battery_state -> ESP32-C3 GPIO4 / ADC1_CH4.
+        Prototype: MCP73831 STAT divider -> ESP32-C3 GPIO4 / ADC1_CH4.
 
 config WEARABLE_CHARGER_STAT_HIGH_RAW
     int "ADC raw threshold: STAT HIGH / charge complete"
@@ -56,17 +21,14 @@ config WEARABLE_CHARGER_STAT_HIGH_RAW
     default 1000
     help
         STAT is approximately 0 V while charging and approximately 2.5 V at
-        battery_state when MCP73831 drives STAT HIGH. The large voltage gap
-        makes a conservative raw ADC threshold sufficient; exact voltage
-        calibration is not required for this state decision.
+        battery_state when MCP73831 drives STAT HIGH.
 
 config WEARABLE_VBUS_SENSE_GPIO
     int "5V/VBUS-present GPIO (-1 if unavailable)"
     default -1
     help
         Needed to distinguish MCP73831 STAT LOW (charging) from STAT High-Z
-        (charger unpowered). With only the current STAT divider those two
-        conditions both pull battery_state near 0 V.
+        (charger unpowered).
 
 config WEARABLE_VBUS_SENSE_ACTIVE_HIGH
     bool "VBUS sense is active high"
@@ -76,9 +38,6 @@ config WEARABLE_BATTERY_VOLTAGE_ADC_CHANNEL
     int "ADC1 channel for a dedicated Vbat divider (-1 if unavailable)"
     range -1 4
     default -1
-    help
-        The current PCB does not expose Vbat through a dedicated ADC divider.
-        Leave disabled. It is required for a true low-battery voltage alarm.
 
 config WEARABLE_BATTERY_DIVIDER_NUM
     int "Vbat divider numerator"

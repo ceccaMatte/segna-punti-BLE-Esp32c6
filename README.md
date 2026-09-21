@@ -98,8 +98,8 @@ Il vecchio codice ESP32-C6 relativo a display, motore punteggio, UI e scoreboard
 
 ## Hardware attuale — prototipo volante
 
-- BTN_B: **GPIO0**, input con pull-up interno, active-low
-- BTN_Moment: **GPIO1**, input con pull-up interno, active-low
+- BTN_Moment: **GPIO0**, input con pull-up interno, active-low
+- BTN_B: **GPIO1**, input con pull-up interno, active-low
 - BTN_A: **GPIO2**, input con pull-up interno, active-low
 - BTN_UNDO: **GPIO3**, input con pull-up interno, active-low
 - GPIO20: **input**
@@ -109,6 +109,11 @@ Il vecchio codice ESP32-C6 relativo a display, motore punteggio, UI e scoreboard
 
 GPIO21 viene usato come sink LOW solo per segnali a corrente molto bassa del
 prototipo; non va trattato come una vera massa di potenza.
+
+Il pinout del prototipo è definito in `main/hardware/board_pins.h` e non più
+nei default Kconfig. Questo evita che un vecchio file `sdkconfig` locale
+ripristini silenziosamente un pinout precedente. Al boot il tag `buttons`
+stampa sempre la mappa effettiva e il livello iniziale dei quattro ingressi.
 
 Vedi `docs/wearable-architecture.md` per i dettagli hardware e
 `docs/ble-protocol.md` per il contratto con l'app.

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "driver/gpio.h"
+#include "board_pins.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -38,10 +39,10 @@ typedef struct {
 } click_accumulator_t;
 
 static const int s_pins[WEARABLE_BUTTON_COUNT] = {
-    CONFIG_WEARABLE_BUTTON_A_GPIO,
-    CONFIG_WEARABLE_BUTTON_B_GPIO,
-    CONFIG_WEARABLE_BUTTON_MOMENT_GPIO,
-    CONFIG_WEARABLE_BUTTON_UNDO_GPIO,
+    BOARD_GPIO_BUTTON_A,
+    BOARD_GPIO_BUTTON_B,
+    BOARD_GPIO_BUTTON_MOMENT,
+    BOARD_GPIO_BUTTON_UNDO,
 };
 
 static button_state_t s_state[WEARABLE_BUTTON_COUNT];
@@ -330,10 +331,12 @@ static void button_task(void *arg)
                 state->raw = raw;
                 state->raw_since = now;
 
-                ESP_LOGD(TAG,
-                         "RAW button=%s edge=%s t_us=%lld",
+                ESP_LOGI(TAG,
+                         "RAW button=%s gpio=%d edge=%s level=%d t_us=%lld",
                          button_name(i),
+                         s_pins[i],
                          raw ? "PRESS" : "RELEASE",
+                         gpio_get_level((gpio_num_t)s_pins[i]),
                          (long long)esp_timer_get_time());
             }
 
@@ -347,8 +350,9 @@ static void button_task(void *arg)
                     state->pressed_at_us = edge_us;
 
                     ESP_LOGI(TAG,
-                             "TIMING button=%s edge=PRESS t_us=%lld t_ms=%lld debounce_ms=%u",
+                             "TIMING button=%s gpio=%d edge=PRESS t_us=%lld t_ms=%lld debounce_ms=%u",
                              button_name(i),
+                             s_pins[i],
                              (long long)edge_us,
                              (long long)(edge_us / 1000),
                              (unsigned)DEBOUNCE_MS);
@@ -363,8 +367,9 @@ static void button_task(void *arg)
                             : 0;
 
                     ESP_LOGI(TAG,
-                             "TIMING button=%s edge=RELEASE t_us=%lld t_ms=%lld held_us=%lld held_ms=%.3f debounce_ms=%u",
+                             "TIMING button=%s gpio=%d edge=RELEASE t_us=%lld t_ms=%lld held_us=%lld held_ms=%.3f debounce_ms=%u",
                              button_name(i),
+                             s_pins[i],
                              (long long)edge_us,
                              (long long)(edge_us / 1000),
                              (long long)held_us,
@@ -411,6 +416,19 @@ esp_err_t button_manager_start(const wearable_config_t *config,
 
     const uint32_t now = now_ms();
 
+    ESP_LOGI(TAG,
+             "pinmap A=GPIO%d B=GPIO%d MOMENT=GPIO%d UNDO=GPIO%d active_low=%d",
+             BOARD_GPIO_BUTTON_A,
+             BOARD_GPIO_BUTTON_B,
+             BOARD_GPIO_BUTTON_MOMENT,
+             BOARD_GPIO_BUTTON_UNDO,
+#if CONFIG_WEARABLE_BUTTON_ACTIVE_LOW
+             1
+#else
+             0
+#endif
+    );
+
     for (uint8_t i = 0; i < WEARABLE_BUTTON_COUNT; ++i) {
         gpio_config_t gpio = {
             .pin_bit_mask = 1ULL << s_pins[i],
@@ -437,10 +455,11 @@ esp_err_t button_manager_start(const wearable_config_t *config,
             s_state[i].stable ? esp_timer_get_time() : 0;
 
         ESP_LOGI(TAG,
-                 "button=%u gpio=%d initial=%s",
-                 (unsigned)i,
+                 "button=%s gpio=%d initial=%s level=%d",
+                 button_name(i),
                  s_pins[i],
-                 s_state[i].stable ? "pressed" : "released");
+                 s_state[i].stable ? "pressed" : "released",
+                 gpio_get_level((gpio_num_t)s_pins[i]));
     }
 
     if (xTaskCreate(button_task,

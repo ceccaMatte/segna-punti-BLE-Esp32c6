@@ -46,8 +46,8 @@ Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`.
 
 | Funzione | ESP32-C3 GPIO | Configurazione |
 | --- | ---: | --- |
-| BTN_B | GPIO0 | input, pull-up interno, active-low |
-| BTN_Moment | GPIO1 | input, pull-up interno, active-low |
+| BTN_Moment | GPIO0 | input, pull-up interno, active-low |
+| BTN_B | GPIO1 | input, pull-up interno, active-low |
 | BTN_A | GPIO2 | input, pull-up interno, active-low |
 | BTN_UNDO | GPIO3 | input, pull-up interno, active-low |
 | battery_state | GPIO4 | MCP73831 STAT via partitore, ADC1_CH4 |
@@ -58,6 +58,12 @@ Esempi validi: `A+B CLICK`, `A+B DOUBLE`, `A+B+Moment LONG`.
 La console di sviluppo resta su USB Serial/JTAG. GPIO20/21 non vengono usati
 dalla UART di debug. GPIO21 è usato come ritorno LOW solo per piccoli segnali
 del prototipo e non come massa di alimentazione.
+
+La mappa GPIO del prototipo è centralizzata in `hardware/board_pins.h`.
+`button_manager`, `board_io` e `sound_manager` usano direttamente quel
+profilo hardware, quindi un `sdkconfig` generato con un vecchio pinout non può
+più cambiare i pulsanti. Il log RAW dei pulsanti è a livello INFO e riporta
+anche GPIO e livello logico, utile in particolare per diagnosticare UNDO/GPIO3.
 
 `battery_state` è STAT, non Vbat. Con il partitore 100k/100k legge circa
 0 V con STAT LOW e circa 2,5 V con STAT HIGH. Con il circuito attuale STAT LOW e

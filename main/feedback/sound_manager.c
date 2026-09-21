@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "driver/ledc.h"
+#include "board_pins.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -158,7 +159,7 @@ esp_err_t sound_manager_start(const wearable_config_t *config)
     }
 
     ledc_channel_config_t channel = {
-        .gpio_num = CONFIG_WEARABLE_BUZZER_GPIO,
+        .gpio_num = BOARD_GPIO_BUZZER,
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = LEDC_CHANNEL_0,
         .intr_type = LEDC_INTR_DISABLE,
