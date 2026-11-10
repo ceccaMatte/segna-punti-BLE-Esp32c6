@@ -12,7 +12,8 @@ idf_component_register(
         "power/power_manager.c"
         "power/sleep_manager.c"
         "link/wearable_protocol.c"
-        "link/ble_manager.c"
+        "link/wifi_link.c"
+        "link/wifi_network.c"
         "web/config_ap.c"
     INCLUDE_DIRS
         "."
@@ -26,7 +27,6 @@ idf_component_register(
         "link"
         "web"
     REQUIRES
-        bt
         nvs_flash
         esp_driver_gpio
         esp_driver_ledc
@@ -40,4 +40,7 @@ idf_component_register(
     EMBED_TXTFILES
         "web/config_ap_page.html"
         "web/config_ap_app.js"
+        "../web-wearable/index.html"
+        "../web-wearable/app.js"
+        "../web-wearable/brand.css"
 )

@@ -1,6 +1,6 @@
 #include "wearable_app.h"
 
-#include "ble_manager.h"
+#include "wifi_link.h"
 #include "board_io.h"
 #include "button_manager.h"
 #include "config_store.h"
@@ -73,31 +73,11 @@ static void on_ack(wearable_action_t action,
                                     ack->transition_flags);
 }
 
-static void on_ble_event(ble_app_event_t event, void *ctx)
+static void start_pairing(void)
 {
-    (void)ctx;
-
-    switch (event) {
-    case BLE_APP_PAIRING_SUCCESS:
-        sound_manager_play_system(
-            WEARABLE_SYS_PAIRING_SUCCESS);
-        break;
-
-    case BLE_APP_AUTH_FAILED:
-    case BLE_APP_ACTION_FAILED:
-        sound_manager_play_system(
-            WEARABLE_SYS_ERROR);
-        break;
-
-    case BLE_APP_CONFIG_CHANGED:
-        /* Config changes are published centrally by config_runtime. */
-        break;
-
-    case BLE_APP_CONNECTED:
-    case BLE_APP_DISCONNECTED:
-    default:
-        break;
-    }
+    sleep_manager_note_button_activity();
+    sound_manager_play_system(WEARABLE_SYS_PAIRING_STARTED);
+    ESP_LOGI(TAG, "Wi-Fi setup: connect to PLAYMAKER_xxxx and open http://192.168.4.1/settings");
 }
 
 static void on_action(wearable_action_t action,
@@ -108,17 +88,11 @@ static void on_action(wearable_action_t action,
     ESP_LOGD(TAG, "gesture action callback=%u", (unsigned)action);
 
     if (action == WEARABLE_ACTION_ENTER_PAIRING) {
-        if (ble_manager_enter_pairing()) {
-            sound_manager_play_system(
-                WEARABLE_SYS_PAIRING_STARTED);
-        } else {
-            sound_manager_play_system(
-                WEARABLE_SYS_ERROR);
-        }
+        start_pairing();
         return;
     }
 
-    if (!ble_manager_send_action(action)) {
+    if (!wifi_link_send_action(action)) {
         sound_manager_play_system(
             WEARABLE_SYS_ERROR);
     }
@@ -132,7 +106,28 @@ static void on_primitive(wearable_token_t token, void *ctx)
              (unsigned)token,
              (unsigned)wearable_token_button_mask(token),
              (unsigned)wearable_token_primitive(token));
+
+    /*
+     * Pairing must stay recoverable even if a saved configuration remaps or
+     * removes the gesture table entry. A long press on the physical UNDO
+     * button is therefore a direct, configuration-independent reset.
+     */
+    if (wearable_token_button_mask(token) ==
+            (uint8_t)(1u << WEARABLE_BUTTON_UNDO) &&
+        wearable_token_primitive(token) == WEARABLE_PRIMITIVE_LONG) {
+        start_pairing();
+        return;
+    }
+
     gesture_engine_feed(token);
+}
+
+static void on_action_failed(wearable_action_t action, uint32_t sequence, void *ctx)
+{
+    (void)ctx;
+    ESP_LOGW(TAG, "Wi-Fi action=%u seq=%lu expired without ACK; press again to retry",
+             (unsigned)action, (unsigned long)sequence);
+    sound_manager_play_system(WEARABLE_SYS_ERROR);
 }
 
 static void on_power(power_event_t event, void *ctx)
@@ -218,28 +213,19 @@ esp_err_t wearable_app_start(void)
     }
 
     /*
-     * Bring the BLE state machine up before exposing physical input. This
+     * Bring the Wi-Fi action queue up before exposing physical input. This
      * prevents a button held during boot from reaching an uninitialized link
      * manager.
      */
-    err = ble_manager_start(&s_config,
-                            on_ack,
-                            on_ble_event,
-                            NULL);
+    err = wifi_link_start(on_ack, on_action_failed, NULL);
     if (err != ESP_OK) {
         return err;
     }
 
-    /*
-     * Wi-Fi SoftAP and BLE intentionally run together. The AP is open by
-     * product requirement and serves only the local configuration UI/API.
-     * Failure to start it must not break gameplay input/BLE.
-     */
+    /* Serve setup and scoring on the AP and on the router LAN address. */
     err = config_ap_start();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG,
-                 "configuration SoftAP unavailable: %s",
-                 esp_err_to_name(err));
+        return err;
     }
 
     err = button_manager_start(&s_config,

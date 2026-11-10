@@ -23,7 +23,7 @@ void wearable_config_set_defaults(wearable_config_t *out)
     out->long_press_ms = WEARABLE_DEFAULT_LONG_PRESS_MS;
     out->sequence_gap_ms = WEARABLE_DEFAULT_SEQUENCE_GAP_MS;
     out->simultaneous_window_ms = WEARABLE_DEFAULT_SIMULTANEOUS_WINDOW_MS;
-    out->mapping_count = 12;
+    out->mapping_count = 10;
 
     out->mappings[0] = (wearable_mapping_t){
         .enabled = true,
@@ -50,54 +50,37 @@ void wearable_config_set_defaults(wearable_config_t *out)
                                         WEARABLE_PRIMITIVE_CLICK)}},
     };
 
-    /* User-requested programmable combination examples. */
     out->mappings[4] = (wearable_mapping_t){
-        .enabled = true,
-        .action = WEARABLE_ACTION_UNDO,
-        .sequence = {1, {wearable_token_from_mask(
-            (uint8_t)((1u << WEARABLE_BUTTON_A) |
-                      (1u << WEARABLE_BUTTON_B)),
-            WEARABLE_PRIMITIVE_CLICK)}},
-    };
-    out->mappings[5] = (wearable_mapping_t){
-        .enabled = true,
-        .action = WEARABLE_ACTION_POINT_A,
-        .sequence = {1, {wearable_token_from_mask(
-            (uint8_t)((1u << WEARABLE_BUTTON_A) |
-                      (1u << WEARABLE_BUTTON_B)),
-            WEARABLE_PRIMITIVE_DOUBLE)}},
-    };
-    out->mappings[6] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_VAR,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_MOMENT,
                                         WEARABLE_PRIMITIVE_DOUBLE)}},
     };
-    out->mappings[7] = (wearable_mapping_t){
+    out->mappings[5] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_ENTER_PAIRING,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_UNDO,
                                         WEARABLE_PRIMITIVE_LONG)}},
     };
-    out->mappings[8] = (wearable_mapping_t){
+    out->mappings[6] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_FAST_FORWARD_START,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_B,
                                         WEARABLE_PRIMITIVE_LONG)}},
     };
-    out->mappings[9] = (wearable_mapping_t){
+    out->mappings[7] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_STOP,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_B,
                                         WEARABLE_PRIMITIVE_RELEASE)}},
     };
-    out->mappings[10] = (wearable_mapping_t){
+    out->mappings[8] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_FAST_REWIND_START,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_A,
                                         WEARABLE_PRIMITIVE_LONG)}},
     };
-    out->mappings[11] = (wearable_mapping_t){
+    out->mappings[9] = (wearable_mapping_t){
         .enabled = true,
         .action = WEARABLE_ACTION_STOP,
         .sequence = {1, {wearable_token(WEARABLE_BUTTON_A,
@@ -114,6 +97,32 @@ void wearable_config_set_defaults(wearable_config_t *out)
         (wearable_tone_t){650, 400, 120};
     out->action_sounds[WEARABLE_ACTION_VAR] =
         (wearable_tone_t){1050, 350, 110};
+}
+
+bool wearable_config_upgrade(wearable_config_t *config)
+{
+    if (!config || config->schema_version < 3 || config->schema_version >= WEARABLE_CONFIG_SCHEMA_VERSION) return false;
+    wearable_config_t previous = *config;
+    wearable_config_set_defaults(config);
+    if (previous.mapping_count <= WEARABLE_MAX_MAPPINGS) {
+        for (uint8_t i = 0; i < previous.mapping_count && config->mapping_count < WEARABLE_MAX_MAPPINGS; i++) {
+            const wearable_mapping_t *mapping = &previous.mappings[i];
+            if (!mapping->enabled || !mapping->sequence.length || mapping->sequence.length > WEARABLE_MAX_SEQUENCE) continue;
+            bool duplicate = false;
+            for (uint8_t j = 0; j < config->mapping_count; j++) {
+                if (sequences_equal(&mapping->sequence, &config->mappings[j].sequence)) duplicate = true;
+            }
+            if (duplicate) continue;
+            config->mappings[config->mapping_count++] = *mapping;
+            if (!wearable_config_is_valid(config)) config->mapping_count--;
+        }
+    }
+    for (unsigned i = 0; i < WEARABLE_ACTION_SOUND_COUNT; i++) {
+        wearable_tone_t old = config->action_sounds[i];
+        config->action_sounds[i] = previous.action_sounds[i];
+        if (!wearable_config_is_valid(config)) config->action_sounds[i] = old;
+    }
+    return true;
 }
 
 bool wearable_config_is_valid(const wearable_config_t *config)
@@ -134,6 +143,7 @@ bool wearable_config_is_valid(const wearable_config_t *config)
     }
 
     bool has_pairing = false;
+    bool has_var = false;
 
     for (uint8_t i = 0; i < config->mapping_count; ++i) {
         const wearable_mapping_t *mapping = &config->mappings[i];
@@ -148,8 +158,24 @@ bool wearable_config_is_valid(const wearable_config_t *config)
         if (mapping->action == WEARABLE_ACTION_ENTER_PAIRING) {
             has_pairing = true;
         }
+        if (mapping->action == WEARABLE_ACTION_VAR && mapping->sequence.length == 1 &&
+            mapping->sequence.tokens[0] == wearable_token(WEARABLE_BUTTON_MOMENT, WEARABLE_PRIMITIVE_DOUBLE)) has_var = true;
 
         for (uint8_t t = 0; t < mapping->sequence.length; ++t) {
+            const wearable_token_t token = mapping->sequence.tokens[t];
+            const wearable_primitive_t primitive = wearable_token_primitive(token);
+            const uint8_t mask = wearable_token_button_mask(token);
+            if (primitive == WEARABLE_PRIMITIVE_TRIPLE ||
+                (primitive == WEARABLE_PRIMITIVE_DOUBLE &&
+                 (mask != (1u << WEARABLE_BUTTON_MOMENT) ||
+                  mapping->action != WEARABLE_ACTION_VAR ||
+                  mapping->sequence.length != 1)) ||
+                (primitive == WEARABLE_PRIMITIVE_RELEASE &&
+                 (mapping->action != WEARABLE_ACTION_STOP ||
+                  mapping->sequence.length != 1 ||
+                  (mask != (1u << WEARABLE_BUTTON_A) && mask != (1u << WEARABLE_BUTTON_B))))) {
+                return false;
+            }
             if (!wearable_token_is_valid(mapping->sequence.tokens[t])) {
                 return false;
             }
@@ -166,7 +192,7 @@ bool wearable_config_is_valid(const wearable_config_t *config)
         }
     }
 
-    if (!has_pairing) {
+    if (!has_pairing || !has_var) {
         return false;
     }
 

@@ -4,7 +4,7 @@
 
 #include "wearable_types.h"
 
-#define WEARABLE_CONFIG_SCHEMA_VERSION 6u
+#define WEARABLE_CONFIG_SCHEMA_VERSION 7u
 
 /* Calibrated from physical-button timing captures on the current enclosure. */
 #define WEARABLE_DEFAULT_MULTI_CLICK_GAP_MS 280u
@@ -14,3 +14,4 @@
 
 void wearable_config_set_defaults(wearable_config_t *out);
 bool wearable_config_is_valid(const wearable_config_t *config);
+bool wearable_config_upgrade(wearable_config_t *config);

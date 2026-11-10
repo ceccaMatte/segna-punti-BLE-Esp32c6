@@ -159,6 +159,12 @@ static void register_short_cycle(uint8_t mask,
                                  uint16_t multi_click_gap_ms,
                                  bool started_in_time)
 {
+    /* Only the central button groups clicks (single=MOMENT, double=VAR). */
+    if (mask != (uint8_t)(1u << WEARABLE_BUTTON_MOMENT)) {
+        flush_clicks();
+        emit_mask(mask, WEARABLE_PRIMITIVE_CLICK);
+        return;
+    }
     /*
      * The multi-click gap is defined from RELEASE(n) to PRESS(n+1), not to
      * RELEASE(n+1). Once the next press starts inside the window we must keep
@@ -178,8 +184,8 @@ static void register_short_cycle(uint8_t mask,
 
     s_clicks.count++;
 
-    if (s_clicks.count >= 3u) {
-        emit_mask(mask, WEARABLE_PRIMITIVE_TRIPLE);
+    if (s_clicks.count >= 2u) {
+        emit_mask(mask, WEARABLE_PRIMITIVE_DOUBLE);
         memset(&s_clicks, 0, sizeof(s_clicks));
         return;
     }
@@ -349,75 +355,84 @@ static void process_finalized_group(uint32_t now,
     reset_group();
 }
 
+static void process_buttons_once(uint32_t now)
+{
+    uint16_t multi_click_gap_ms;
+    uint16_t long_press_ms;
+    uint16_t simultaneous_window_ms;
+
+    timing_snapshot(&multi_click_gap_ms,
+                    &long_press_ms,
+                    &simultaneous_window_ms);
+
+    uint8_t press_edges = 0;
+    for (uint8_t i = 0; i < WEARABLE_BUTTON_COUNT; ++i) {
+        button_state_t *state = &s_state[i];
+        const bool raw = is_pressed(s_pins[i]);
+
+        if (raw != state->raw) {
+            state->raw = raw;
+            state->raw_since = now;
+
+            ESP_LOGD(TAG,
+                     "raw button=%s gpio=%d edge=%s level=%d",
+                     button_name(i),
+                     s_pins[i],
+                     raw ? "PRESS" : "RELEASE",
+                     gpio_get_level((gpio_num_t)s_pins[i]));
+        }
+
+        if (raw != state->stable &&
+            (uint32_t)(now - state->raw_since) >= DEBOUNCE_MS) {
+            state->stable = raw;
+
+            if (raw) {
+                sleep_manager_note_button_activity();
+
+                ESP_LOGD(TAG,
+                         "debounced button=%s edge=PRESS",
+                         button_name(i));
+
+                press_edges |= (uint8_t)(1u << i);
+            } else {
+                ESP_LOGD(TAG,
+                         "debounced button=%s edge=RELEASE",
+                         button_name(i));
+            }
+        }
+    }
+
+    /* Retire a released group before admitting a new button press. */
+    finalize_group_if_due(now);
+    process_finalized_group(now, multi_click_gap_ms, long_press_ms);
+    for (uint8_t i = 0; i < WEARABLE_BUTTON_COUNT; i++) {
+        if (press_edges & (1u << i)) start_or_extend_group(i, now, simultaneous_window_ms);
+    }
+    finalize_group_if_due(now);
+    process_finalized_group(now,
+                            multi_click_gap_ms,
+                            long_press_ms);
+
+    if (s_clicks.count != 0u &&
+        (int32_t)(now - s_clicks.deadline_ms) >= 0) {
+        const bool next_press_started_in_time =
+            ((s_group.collecting || s_group.finalized) &&
+             s_group.multi_started_in_time) ||
+            pending_raw_press_started_in_time();
+
+        if (!next_press_started_in_time) {
+            flush_clicks();
+        }
+    }
+
+
+}
+
 static void button_task(void *arg)
 {
     (void)arg;
-
     for (;;) {
-        const uint32_t now = now_ms();
-        uint16_t multi_click_gap_ms;
-        uint16_t long_press_ms;
-        uint16_t simultaneous_window_ms;
-
-        timing_snapshot(&multi_click_gap_ms,
-                        &long_press_ms,
-                        &simultaneous_window_ms);
-
-        for (uint8_t i = 0; i < WEARABLE_BUTTON_COUNT; ++i) {
-            button_state_t *state = &s_state[i];
-            const bool raw = is_pressed(s_pins[i]);
-
-            if (raw != state->raw) {
-                state->raw = raw;
-                state->raw_since = now;
-
-                ESP_LOGD(TAG,
-                         "raw button=%s gpio=%d edge=%s level=%d",
-                         button_name(i),
-                         s_pins[i],
-                         raw ? "PRESS" : "RELEASE",
-                         gpio_get_level((gpio_num_t)s_pins[i]));
-            }
-
-            if (raw != state->stable &&
-                (uint32_t)(now - state->raw_since) >= DEBOUNCE_MS) {
-                state->stable = raw;
-
-                if (raw) {
-                    sleep_manager_note_button_activity();
-
-                    ESP_LOGD(TAG,
-                             "debounced button=%s edge=PRESS",
-                             button_name(i));
-
-                    start_or_extend_group(i,
-                                          now,
-                                          simultaneous_window_ms);
-                } else {
-                    ESP_LOGD(TAG,
-                             "debounced button=%s edge=RELEASE",
-                             button_name(i));
-                }
-            }
-        }
-
-        finalize_group_if_due(now);
-        process_finalized_group(now,
-                                multi_click_gap_ms,
-                                long_press_ms);
-
-        if (s_clicks.count != 0u &&
-            (int32_t)(now - s_clicks.deadline_ms) >= 0) {
-            const bool next_press_started_in_time =
-                ((s_group.collecting || s_group.finalized) &&
-                 s_group.multi_started_in_time) ||
-                pending_raw_press_started_in_time();
-
-            if (!next_press_started_in_time) {
-                flush_clicks();
-            }
-        }
-
+        process_buttons_once(now_ms());
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
     }
 }

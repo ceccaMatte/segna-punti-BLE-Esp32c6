@@ -1,0 +1,2 @@
+#pragma once
+#define CONFIG_WEARABLE_BUTTON_ACTIVE_LOW 1

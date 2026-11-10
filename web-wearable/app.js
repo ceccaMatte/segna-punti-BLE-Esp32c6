@@ -1,24 +1,15 @@
 const PROTOCOL_VERSION = 6;
-const SERVICE = 'c4d10001-6f65-4b6e-ae30-706c61796d6b';
-const UUID = {
-  action:'c4d10002-6f65-4b6e-ae30-706c61796d6b',
-  ack:'c4d10003-6f65-4b6e-ae30-706c61796d6b',
-  control:'c4d10004-6f65-4b6e-ae30-706c61796d6b',
-  status:'c4d10005-6f65-4b6e-ae30-706c61796d6b',
-};
 const ACTION = { POINT_A:0, POINT_B:1, MOMENT:2, UNDO:3, VAR:4, FAST_FORWARD_START:5, FAST_REWIND_START:6, STOP:7 };
 const ACK = { OK:0, REJECTED:1, TEMP:2 };
 const FLAG = { GAME:1, SET:2, MATCH:4 };
-const RETRY_MS=[500,500,1000,1000,2000,3000,5000,8000];
 
-let device=null, chars={}, reconnectAttempt=0, reconnectTimer=null, suppressReconnect=false;
-const ackCache=new Map();
+let ackCache=new Map();
 let history=[];
 let state=freshState();
 
 const $=id=>document.getElementById(id);
-function diag(e,d){d===undefined?console.debug('[Playmaker][BLE]',e):console.debug('[Playmaker][BLE]',e,d)}
-function err(e,d){console.error('[Playmaker][BLE]',e,d)}
+function diag(e,d){d===undefined?console.debug('[Playmaker][Wi-Fi]',e):console.debug('[Playmaker][Wi-Fi]',e,d)}
+function err(e,d){console.error('[Playmaker][Wi-Fi]',e,d)}
 function eventText(t){$('lastEvent').textContent=t;diag(t)}
 function setBle(t,ok=false){$('bleStatus').textContent=t;$('bleDot').className='dot '+(ok?'ok':'bad')}
 
@@ -30,7 +21,7 @@ function render(){
   $('gamesA').textContent=state.gamesA;$('gamesB').textContent=state.gamesB;
   $('pointsA').textContent=state.tiebreak?state.tbA:pointText(state.pointsA);
   $('pointsB').textContent=state.tiebreak?state.tbB:pointText(state.pointsB);
-  $('tbLabel').style.display=state.tiebreak?'block':'none';
+  $('tbLabel').hidden=!state.tiebreak;
   $('tbLabel').textContent=state.tiebreak?'Tie-break in corso':'';
 }
 function gameWon(team){
@@ -99,110 +90,84 @@ function makeAck(session,sequence,status,flags){
   return out;
 }
 
-function randomToken(){const v=new Uint8Array(16);crypto.getRandomValues(v);return v}
-function tokenKey(){return device?`playmaker-token:${device.id}`:''}
-function loadToken(){const raw=localStorage.getItem(tokenKey());if(!raw)return null;const v=raw.split(',').map(Number);return v.length===16?new Uint8Array(v):null}
-function saveToken(t){localStorage.setItem(tokenKey(),Array.from(t).join(','))}
-function forgetToken(){const key=tokenKey();if(key)localStorage.removeItem(key)}
-function controlPacket(op,t){const out=new Uint8Array(17);out[0]=op;out.set(t,1);return out}
-async function writeChar(ch,bytes){diag('GATT write',{uuid:ch.uuid,bytes:Array.from(bytes)});return ch.writeValueWithResponse?ch.writeValueWithResponse(bytes):ch.writeValue(bytes)}
-function decodeStatus(dv){
-  if(dv.byteLength<10||dv.getUint8(0)!==PROTOCOL_VERSION||dv.getUint8(1)!==3)throw new Error('Status protocol mismatch');
-  return {commissioned:!!dv.getUint8(2),authenticated:!!dv.getUint8(3),pairingOpen:!!dv.getUint8(4),batteryMv:dv.getUint16(5,true)}
+
+const clientId=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
+let running=false,pollTimer,storageKey='',ready=false,connecting=false;
+
+async function api(path,options={}) {
+  const response=await fetch(path,{...options,cache:'no-store',signal:AbortSignal.timeout(path==='/api/ack'?800:6000),
+    headers:{'X-Playmaker-Client':clientId,...options.headers}});
+  if(!response.ok){const e=new Error(await response.text());e.status=response.status;throw e}
+  return response;
 }
-function paintStatus(s){$('commissioned').textContent=s.commissioned?'Sì':'No';$('authenticated').textContent=s.authenticated?'Sì':'No';$('pairingOpen').textContent=s.pairingOpen?'Aperto':'Chiuso'}
-async function readStatus(){const s=decodeStatus(await chars.status.readValue());paintStatus(s);diag('status',s);return s}
-function onStatusNotification(ev){try{
-  const s=decodeStatus(ev.target.value);paintStatus(s);
-  if(!s.commissioned&&s.pairingOpen){
-    suppressReconnect=true;
-    clearTimeout(reconnectTimer);
-    reconnectTimer=null;
-    forgetToken();
-    eventText('Pairing reset: credenziali locali dimenticate. Wearable libero per una nuova associazione.');
-    if(device?.gatt?.connected)device.gatt.disconnect();
-  }
-}catch(e){err('status notify',e)}}
-async function authenticateOrClaim(allowClaim){
-  const s=await readStatus();
-  let token=loadToken();
-
-  if(s.commissioned){
-    if(!token){
-      suppressReconnect=true;
-      if(device?.gatt?.connected)device.gatt.disconnect();
-      throw new Error('Wearable associato a un altro client: esegui la gesture fisica di Pairing.');
-    }
-    await writeChar(chars.control,controlPacket(0x02,token));
-  }else{
-    if(!s.pairingOpen){
-      suppressReconnect=true;
-      if(device?.gatt?.connected)device.gatt.disconnect();
-      throw new Error('Pairing chiuso: esegui la gesture fisica di Pairing.');
-    }
-
-    /*
-     * Virgin pairing: any credential previously cached by this browser is
-     * deliberately discarded. Auto-reconnect is never allowed to reclaim an
-     * uncommissioned wearable; only an explicit Connetti / Pair user action
-     * can generate a fresh owner token.
-     */
-    forgetToken();
-
-    if(!allowClaim){
-      suppressReconnect=true;
-      clearTimeout(reconnectTimer);
-      reconnectTimer=null;
-      if(device?.gatt?.connected)device.gatt.disconnect();
-      throw new Error('Wearable in pairing vergine: usa Connetti / Pair per creare una nuova associazione.');
-    }
-
-    token=randomToken();
-    saveToken(token);
-    diag('fresh pairing token generated');
-    await writeChar(chars.control,controlPacket(0x01,token));
-  }
-
-  const after=await readStatus();
-  if(!after.authenticated)throw new Error('Autenticazione fallita.');
+function persist(){localStorage.setItem(storageKey,JSON.stringify({state,history,acks:Array.from(ackCache,([k,v])=>[k,Array.from(v)])}))}
+function restore(){
+  const raw=localStorage.getItem(storageKey);if(!raw)return;
+  const saved=JSON.parse(raw);
+  if(!saved.state||!Array.isArray(saved.history)||!Array.isArray(saved.acks))throw new Error('Partita salvata non valida');
+  state=saved.state;history=saved.history;ackCache=new Map(saved.acks.map(([k,v])=>[k,new Uint8Array(v)]));render();
 }
-async function connectDevice(target,{allowClaim=false}={}){
-  clearTimeout(reconnectTimer);device=target;device.removeEventListener('gattserverdisconnected',onDisconnected);device.addEventListener('gattserverdisconnected',onDisconnected);
-  setBle('Connessione…');
-  const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE);
-  chars={action:await service.getCharacteristic(UUID.action),ack:await service.getCharacteristic(UUID.ack),control:await service.getCharacteristic(UUID.control),status:await service.getCharacteristic(UUID.status)};
-  await chars.status.startNotifications();chars.status.addEventListener('characteristicvaluechanged',onStatusNotification);
-  await chars.action.startNotifications();chars.action.addEventListener('characteristicvaluechanged',onAction);
-  await authenticateOrClaim(allowClaim);reconnectAttempt=0;suppressReconnect=false;setBle(device.name,true);eventText('BLE autenticato: '+device.name);
+async function networkStatus(){
+  const response=await fetch('/api/network',{cache:'no-store',signal:AbortSignal.timeout(6000)});
+  if(!response.ok)throw new Error('Apri il tabellone all’indirizzo del wearable, non su localhost.');
+  const info=await response.json();
+  $('networkName').textContent=info.connected?info.ssid:'Collegamento diretto al wearable';
+  $('networkIp').textContent=info.ip||'192.168.4.1';$('deviceName').textContent=info.name;
+  $('setupHint').hidden=info.connected;
+  if(!ready){storageKey='playmaker-wifi-match:'+info.name;restore();ready=true}
 }
-async function requestConnect(){suppressReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;const target=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}]});await connectDevice(target,{allowClaim:true})}
-async function findGrantedDevice(){if(!navigator.bluetooth.getDevices)return null;const ds=await navigator.bluetooth.getDevices();return ds.find(d=>d.name?.startsWith('PLAYMAKER_'))??null}
-async function autoReconnect(){if(suppressReconnect)return false;try{const d=device??await findGrantedDevice();if(!d)return false;await connectDevice(d,{allowClaim:false});return true}catch(e){err('reconnect',e);setBle(e.message);return false}}
-function onDisconnected(){setBle('Disconnesso');if(suppressReconnect)return;const delay=RETRY_MS[Math.min(reconnectAttempt++,RETRY_MS.length-1)];reconnectTimer=setTimeout(async()=>{if(!(await autoReconnect()))onDisconnected()},delay)}
-async function onAction(ev){
+async function connect(){
+  if(connecting)return;
+  connecting=true;running=false;clearTimeout(pollTimer);
   try{
-    const dv=ev.target.value;if(dv.byteLength!==12||dv.getUint8(0)!==PROTOCOL_VERSION||dv.getUint8(1)!==1)return;
-    const session=dv.getUint32(2,true),sequence=dv.getUint32(6,true),action=dv.getUint8(10),key=`${session}:${sequence}`;
-    let ack=ackCache.get(key);
-    if(!ack){
-      const result=applyAction(action);ack=makeAck(session,sequence,result.status,result.flags);ackCache.set(key,ack);
-      if(ackCache.size>64)ackCache.delete(ackCache.keys().next().value);
-      eventText(`ACTION ${['POINT_A','POINT_B','MOMENT','UNDO','VAR','FAST_FORWARD_START','FAST_REWIND_START','STOP'][action]??action} · seq ${sequence} · flags 0x${result.flags.toString(16)}`);
-    }else eventText(`Retry seq ${sequence}: restituito ACK cached`);
-    await writeChar(chars.ack,ack);
-  }catch(e){err('ACTION/ACK',e);eventText('Errore ACTION/ACK: '+e.message)}
+    await networkStatus();persist();await api('/api/session',{method:'POST'});
+    running=true;setBle('Wearable connesso',true);$('connect').textContent='Connesso';
+    pollTimer=setTimeout(poll,0);
+  }finally{connecting=false}
 }
-
-$('connect').onclick=async()=>{try{await requestConnect()}catch(e){err('connect',e);setBle(e.message);eventText(e.message)}};
-$('auto').onclick=async()=>{suppressReconnect=false;if(!(await autoReconnect()))eventText('Nessun device autorizzato o riconnessione fallita.')};
-$('manualA').onclick=()=>{const r=applyAction(ACTION.POINT_A);eventText('Punto A manuale · flags 0x'+r.flags.toString(16))};
-$('manualB').onclick=()=>{const r=applyAction(ACTION.POINT_B);eventText('Punto B manuale · flags 0x'+r.flags.toString(16))};
-$('manualUndo').onclick=()=>{const r=applyAction(ACTION.UNDO);eventText(r.status===ACK.OK?'Undo manuale':'Niente da annullare')};
-$('resetMatch').onclick=()=>{state=freshState();history=[];ackCache.clear();render();eventText('Nuova partita')};
-$('clearBrowserToken').onclick=()=>{forgetToken();suppressReconnect=true;eventText('Token locale eliminato. Per riassociare serve la gesture fisica Pairing.')};
-
-window.addEventListener('load',()=>{
-  render();
-  if(location.protocol==='file:')eventText('Apri questa pagina tramite http://localhost, non come file://');
-  if(!navigator.bluetooth){setBle('Web Bluetooth non disponibile');eventText('Usa Chrome/Edge desktop via localhost o HTTPS.')}
-});
+async function poll(){
+  if(!running)return;
+  try{
+    const response=await api('/api/action');
+    if(response.status!==204){
+      const dv=new DataView(await response.arrayBuffer());
+      if(dv.byteLength!==12||dv.getUint8(0)!==PROTOCOL_VERSION||dv.getUint8(1)!==1)throw new Error('Messaggio non compatibile');
+      const session=dv.getUint32(2,true),sequence=dv.getUint32(6,true),action=dv.getUint8(10),key=session+':'+sequence;
+      if(action>ACTION.STOP)throw new Error('Azione sconosciuta');
+      let ack=ackCache.get(key);
+      if(!ack){
+        const previous=clone(state),previousHistory=history.slice();
+        const result=applyAction(action);ack=makeAck(session,sequence,result.status,result.flags);ackCache.set(key,ack);
+        if(ackCache.size>64)ackCache.delete(ackCache.keys().next().value);
+        try{persist()}catch(e){state=previous;history=previousHistory;ackCache.delete(key);render();throw e}
+        eventText(['Punto squadra A','Punto squadra B','Momento segnato','Ultimo punto annullato','VAR','Avanti veloce','Indietro veloce','Stop'][action]);
+      }
+      await api('/api/ack',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:ack});
+    }
+    setBle('Wearable connesso',true);pollTimer=setTimeout(poll,150);
+  }catch(e){
+    err('connessione',e);setBle('Connessione interrotta. Riprovo…');
+    if(e.status===410){eventText(e.message);pollTimer=setTimeout(poll,150);return}
+    if(e.status===409){running=false;setBle(e.message);$('connect').textContent='Connetti';pollTimer=setTimeout(reconnect,2000);return}
+    pollTimer=setTimeout(poll,150);
+  }
+}
+async function reconnect(){
+  try{await connect()}catch(e){setBle(e.message);$('connect').textContent='Riprova';pollTimer=setTimeout(reconnect,2000)}
+}
+$('connect').onclick=reconnect;
+function manual(action){
+  if(!ready||!running)return;
+  const before=clone(state),beforeHistory=history.slice(),result=applyAction(action);
+  try{persist();eventText(result.status===ACK.OK?'Punteggio aggiornato':'Niente da annullare')}
+  catch(e){state=before;history=beforeHistory;render();eventText('Salvataggio non disponibile: punto non registrato')}
+}
+$('manualA').onclick=()=>manual(ACTION.POINT_A);
+$('manualB').onclick=()=>manual(ACTION.POINT_B);
+$('manualUndo').onclick=()=>manual(ACTION.UNDO);
+$('resetMatch').onclick=()=>{
+  if(!ready||!running||!confirm('Iniziare una nuova partita?'))return;
+  state=freshState();history=[];persist();render();eventText('Nuova partita');
+};
+render();reconnect();
+setInterval(()=>networkStatus().catch(()=>{}),10000);

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b0c10">
-  <title>Playmaker · Wearable</title>
+  <title>Playmaker · Configurazione Wi-Fi</title><link rel="icon" href="data:,">
   <style>
     :root{--bg:#f4f5f7;--card:#fff;--ink:#101114;--muted:#71747b;--line:#e7e8eb;--accent:#111318;--good:#18a558;--danger:#b42332;--shadow:0 10px 30px #1118270d}
     *{box-sizing:border-box}
@@ -51,27 +51,57 @@
     .loading{opacity:.45;pointer-events:none}
     @media(max-width:700px){.shell{padding:12px 12px 52px}.hero{border-radius:22px;padding:20px}.card{border-radius:20px;padding:16px}.timing-grid{grid-template-columns:1fr}.sound-row{grid-template-columns:1fr 1fr}.sound-row strong{grid-column:1/-1}.buttons{grid-template-columns:repeat(2,1fr)}.step-controls{grid-template-columns:1fr}.toolbar{align-items:flex-start}.mapping-head{align-items:flex-start}}
   </style>
+  <link rel="stylesheet" href="/brand.css">
+  <style>
+    .field,.mapping,.step,.mini{background:var(--card-2);border-color:var(--line);color:var(--ink)}
+    .button-chip{background:var(--card-2);color:var(--ink);border-color:var(--line)}
+    .button-chip.on{background:var(--accent);color:#0b0c10;border-color:var(--accent)}
+    input,select{background:var(--card-2);color:var(--ink);border-color:var(--line)}
+    button.primary{background:var(--accent);color:#0b0c10}
+    button.ghost{color:var(--ink);border-color:var(--line)}
+    .toolbar .hint{max-width:60ch}.hero p{color:var(--muted)}
+    .card h2{font-size:1.4rem}.field small{color:var(--muted)}.toast{max-width:90%;border-radius:14px}
+    .eyebrow{display:none}
+  </style>
 </head>
 <body>
   <main class="shell">
+    <header class="brandbar"><a class="brand" href="/">playmaker</a><a href="/">Tabellone</a></header>
     <section class="hero">
       <div class="eyebrow">Playmaker · ESP32-C3</div>
-      <h1>Wearable configuration</h1>
-      <p>Ogni gesture è una combinazione di pulsanti + un tipo di pressione.</p>
+      <h1>Il tuo wearable.<br>La tua rete.</h1>
+      <p>Configura il Wi-Fi, personalizza i pulsanti, entra in campo.</p>
       <div class="statusbar">
         <span class="pill"><span id="statusDot" class="dot"></span><span id="statusText">Connessione…</span></span>
         <span class="pill" id="ssid">wearable_config_eps32_c3</span>
-        <span class="pill" id="ble">BLE: —</span>
+        <span class="pill" id="ble">Wi-Fi</span>
       </div>
     </section>
 
     <div class="grid">
+      <section class="card" id="wifiSetup">
+        <h2>Collega il wearable al campo.</h2>
+        <p class="hint">Scegli una rete Wi-Fi a 2,4 GHz e inserisci la password. Il wearable ricorderà l'ultima rete collegata.</p>
+        <div class="network-grid">
+          <div><label for="wifiSsid">Rete Wi-Fi</label><select id="wifiSsid"><option value="">Ricerca delle reti…</option></select></div>
+          <div><label for="wifiPassword">Password della rete</label><input id="wifiPassword" type="password" autocomplete="off" maxlength="64" placeholder="Password Wi-Fi"></div>
+        </div>
+        <div class="row" style="margin-top:18px"><button id="wifiConnect" class="primary">Collega e memorizza</button><button id="wifiScan">Cerca reti</button></div>
+        <p id="wifiMessage" class="hint" role="status" style="margin-top:16px">Controllo della connessione…</p>
+        <div id="lanReady" class="notice" hidden>
+          <strong>Il wearable è nella LAN.</strong>
+          <p>Ricollega il PC alla rete <strong id="lanSsid"></strong>, poi apri il tabellone:</p>
+          <a id="lanLink" class="network-address" href="/">Apri tabellone</a>
+        </div>
+        <p class="hint">Se la tua rete non è disponibile, il wearable prova automaticamente la rete di riserva <strong>Se</strong>. La rete salvata rimane in memoria.</p>
+      </section>
+
       <section class="card">
         <h2>Timing</h2>
         <p class="hint">Questi valori definiscono come il firmware interpreta il gesto fisico. I default sono già adatti al primo test.</p>
         <div class="timing-grid">
           <div class="field"><label>Simultaneità</label><small>Scarto massimo tra la pressione dei pulsanti dello stesso gruppo.</small><div class="number-row"><input id="simultaneousMs" type="number" min="20" max="250"><span>ms</span></div></div>
-          <div class="field"><label>Multi-click</label><small>Tempo massimo tra due cicli dello stesso gruppo per doppio/triplo click.</small><div class="number-row"><input id="multiGap" type="number" min="120" max="1000"><span>ms</span></div></div>
+          <div class="field"><label>Doppio click centrale</label><small>Attesa del secondo click per VAR. A, B e Undo inviano ogni click separatamente.</small><div class="number-row"><input id="multiGap" type="number" min="120" max="1000"><span>ms</span></div></div>
           <div class="field"><label>Pressione lunga</label><small>Durata minima del gruppo premuto per generare LONG.</small><div class="number-row"><input id="longMs" type="number" min="400" max="5000"><span>ms</span></div></div>
           <div class="field"><label>Sequenza</label><small>Tempo massimo tra step diversi di una gesture composta.</small><div class="number-row"><input id="seqGap" type="number" min="100" max="1500"><span>ms</span></div></div>
         </div>
@@ -100,6 +130,6 @@
     </div>
   </main>
   <div id="toast" class="toast"></div>
-  <script src="/app.js"></script>
+  <script src="/settings.js"></script>
 </body>
 </html>

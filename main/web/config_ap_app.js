@@ -1,5 +1,5 @@
 const PROTOCOL_VERSION = 6;
-const ACTIONS = ['Punto A', 'Punto B', 'Moment', 'Undo', 'VAR', 'Fast forward start', 'Fast rewind start', 'Stop', 'Pairing'];
+const ACTIONS = ['Punto A', 'Punto B', 'Moment', 'Undo', 'VAR', 'Fast forward start', 'Fast rewind start', 'Stop', 'Configurazione Wi-Fi'];
 const PAIRING_ACTION = 8;
 const SOUND_ACTION_COUNT = 5;
 const BUTTONS = ['A', 'B', 'Moment', 'Undo'];
@@ -41,7 +41,7 @@ async function fetchStatus() {
   if (!response.ok) throw new Error('HTTP status ' + response.status);
   const value = await response.json();
   $('ssid').textContent = value.ssid;
-  $('ble').textContent = 'BLE: ' + (value.bleAuthenticated ? 'autenticato' : 'non autenticato');
+  $('ble').textContent = 'Tabellone: ' + (value.controllerConnected ? 'connesso' : 'in attesa');
   setStatus('ESP32-C3 online', true);
   diag('status', value);
 }
@@ -114,7 +114,7 @@ function renderStep(value, mapIndex, stepIndex) {
     </div>
     <div class="step-controls">
       <label>Tipo di pressione<select data-type="${mapIndex}:${stepIndex}">
-        ${TYPES.map((name,i)=>`<option value="${i}" ${i===type?'selected':''}>${name}</option>`).join('')}
+        ${[0,3].map(i=>`<option value="${i}" ${i===type?'selected':''}>${TYPES[i]}</option>`).join('')}
       </select></label>
       <label>Interpretazione<span style="display:block;margin-top:4px;padding:10px 12px;background:#fff;border:1px solid #ddd;border-radius:12px;color:#444">${stepLabel(value)}</span></label>
     </div>
@@ -128,12 +128,14 @@ function render() {
   const pairingCount = config.mappings.filter(m => m.action === PAIRING_ACTION).length;
   $('mappings').innerHTML = config.mappings.length ? config.mappings.map((m,i)=>{
     const summary=m.seq.map(stepLabel).join(' → ');
+    const primitive=m.seq.length===1?tokenType(m.seq[0]):-1;
+    if(primitive===1||primitive===4)return `<div class="mapping"><div class="mapping-title">${primitive===1?'Centrale doppio click → VAR':'Rilascio automatico → Stop'}</div><p class="hint">${primitive===1?'Il doppio click è disponibile solo sul tasto centrale. Un click singolo invia Momento.':'Ferma avanzamento o riavvolgimento quando rilasci il pulsante.'}</p></div>`;
     const protectsPairing = m.action === PAIRING_ACTION && pairingCount === 1;
     return `<div class="mapping">
       <div class="mapping-head"><div><div class="mapping-title">Gesture ${i+1}</div>
       <div class="mapping-summary">${summary} → ${ACTIONS[m.action]}</div></div>
       ${protectsPairing
-        ? '<span class="mapping-summary">Pairing obbligatorio</span>'
+        ? '<span class="mapping-summary">Configurazione Wi-Fi</span>'
         : `<button class="danger" data-delete-map="${i}">Elimina</button>`}
       </div>
       ${m.seq.map((v,s)=>renderStep(v,i,s)).join('')}
@@ -216,3 +218,54 @@ window.addEventListener('load',async()=>{try{await fetchStatus();await refreshCo
   diagError('init',e);setStatus(e.message||String(e),false);
   $('mappings').innerHTML='<div class="empty">Impossibile caricare la configurazione. Controlla la console del browser.</div>';
 }});
+let scanTimer;
+async function networkStatus() {
+  const response=await fetch('/api/network',{cache:'no-store',signal:AbortSignal.timeout(6000)});
+  if(!response.ok)throw new Error('Wearable non raggiungibile');
+  const info=await response.json();
+  $('ssid').textContent=info.name;
+  $('wifiMessage').textContent=info.message;
+  $('lanReady').hidden=!info.connected;
+  if(info.connected){
+    $('lanSsid').textContent=info.ssid;
+    $('lanLink').textContent='http://'+info.ip+'/';
+    $('lanLink').href='http://'+info.ip+'/';
+  }
+}
+async function scanNetworks() {
+  clearTimeout(scanTimer);
+  $('wifiScan').disabled=true;
+  try{
+    const response=await fetch('/api/networks',{cache:'no-store',signal:AbortSignal.timeout(15000)});
+    if(response.status===409){$('wifiMessage').textContent=await response.text();scanTimer=setTimeout(scanNetworks,4000);return}
+    if(!response.ok)throw new Error('Ricerca reti non riuscita. Premi Cerca reti per riprovare.');
+    const networks=await response.json(), select=$('wifiSsid'),selected=select.value;
+    select.replaceChildren(new Option('Scegli la rete Wi-Fi',''));
+    const seen=new Set();
+    for(const n of networks){
+      if(seen.has(n.ssid))continue;seen.add(n.ssid);
+      select.add(new Option(n.ssid+' · '+n.rssi+' dBm'+(n.secured?'':' · aperta'),n.ssid));
+    }
+    if(seen.has(selected))select.value=selected;
+    if(!networks.length)$('wifiMessage').textContent='Nessuna rete trovata. Verifica che il router usi il Wi-Fi a 2,4 GHz.';
+  }catch(e){$('wifiMessage').textContent=e.message}
+  finally{$('wifiScan').disabled=false}
+}
+$('wifiScan').onclick=scanNetworks;
+$('wifiConnect').onclick=async()=>{
+  const encoder=new TextEncoder(),ssid=encoder.encode($('wifiSsid').value),password=encoder.encode($('wifiPassword').value);
+  if(!ssid.length||ssid.length>32||password.length>64||(password.length>0&&password.length<8)){
+    $('wifiMessage').textContent='Scegli una rete. La password deve avere almeno 8 caratteri, oppure essere vuota per una rete aperta.';return;
+  }
+  const payload=new Uint8Array(98);payload.set(ssid,0);payload.set(password,33);
+  $('wifiConnect').disabled=true;
+  try{
+    const response=await fetch('/api/network',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:payload,signal:AbortSignal.timeout(6000)});
+    const message=await response.text();if(!response.ok)throw new Error(message);
+    $('wifiPassword').value='';$('wifiMessage').textContent=message;
+  }catch(e){$('wifiMessage').textContent=e.message}
+  finally{$('wifiConnect').disabled=false}
+};
+networkStatus().catch(e=>$('wifiMessage').textContent=e.message);
+scanNetworks();
+setInterval(()=>networkStatus().catch(()=>$('wifiMessage').textContent='Riconnessione al wearable… Il cambio di rete può richiedere alcuni secondi.'),3000);

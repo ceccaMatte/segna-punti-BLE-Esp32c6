@@ -51,47 +51,36 @@ static void test_defaults_are_valid(void)
 
     assert(wearable_config_is_valid(&config));
     assert(config.schema_version == WEARABLE_CONFIG_SCHEMA_VERSION);
-    assert(config.mapping_count == 12u);
+    assert(config.mapping_count == 10u);
     assert(config.multi_click_gap_ms == 280u);
     assert(config.long_press_ms == 450u);
     assert(config.sequence_gap_ms == 300u);
     assert(config.simultaneous_window_ms == 60u);
 
-    const uint8_t ab =
-        (uint8_t)((1u << WEARABLE_BUTTON_A) |
-                  (1u << WEARABLE_BUTTON_B));
-    assert(config.mappings[4].action == WEARABLE_ACTION_UNDO);
+    assert(config.mappings[4].action == WEARABLE_ACTION_VAR);
     assert(config.mappings[4].sequence.tokens[0] ==
-           wearable_token_from_mask(ab, WEARABLE_PRIMITIVE_CLICK));
-
-    assert(config.mappings[5].action == WEARABLE_ACTION_POINT_A);
-    assert(config.mappings[5].sequence.tokens[0] ==
-           wearable_token_from_mask(ab, WEARABLE_PRIMITIVE_DOUBLE));
-
-    assert(config.mappings[6].action == WEARABLE_ACTION_VAR);
-    assert(config.mappings[6].sequence.tokens[0] ==
            wearable_token(WEARABLE_BUTTON_MOMENT,
                           WEARABLE_PRIMITIVE_DOUBLE));
 
-    assert(config.mappings[7].action == WEARABLE_ACTION_ENTER_PAIRING);
-    assert(config.mappings[7].sequence.tokens[0] ==
+    assert(config.mappings[5].action == WEARABLE_ACTION_ENTER_PAIRING);
+    assert(config.mappings[5].sequence.tokens[0] ==
            wearable_token(WEARABLE_BUTTON_UNDO,
                           WEARABLE_PRIMITIVE_LONG));
 
-    assert(config.mappings[8].action == WEARABLE_ACTION_FAST_FORWARD_START);
-    assert(config.mappings[8].sequence.tokens[0] ==
+    assert(config.mappings[6].action == WEARABLE_ACTION_FAST_FORWARD_START);
+    assert(config.mappings[6].sequence.tokens[0] ==
            wearable_token(WEARABLE_BUTTON_B,
+                          WEARABLE_PRIMITIVE_LONG));
+    assert(config.mappings[7].action == WEARABLE_ACTION_STOP);
+    assert(config.mappings[7].sequence.tokens[0] ==
+           wearable_token(WEARABLE_BUTTON_B,
+                          WEARABLE_PRIMITIVE_RELEASE));
+    assert(config.mappings[8].action == WEARABLE_ACTION_FAST_REWIND_START);
+    assert(config.mappings[8].sequence.tokens[0] ==
+           wearable_token(WEARABLE_BUTTON_A,
                           WEARABLE_PRIMITIVE_LONG));
     assert(config.mappings[9].action == WEARABLE_ACTION_STOP);
     assert(config.mappings[9].sequence.tokens[0] ==
-           wearable_token(WEARABLE_BUTTON_B,
-                          WEARABLE_PRIMITIVE_RELEASE));
-    assert(config.mappings[10].action == WEARABLE_ACTION_FAST_REWIND_START);
-    assert(config.mappings[10].sequence.tokens[0] ==
-           wearable_token(WEARABLE_BUTTON_A,
-                          WEARABLE_PRIMITIVE_LONG));
-    assert(config.mappings[11].action == WEARABLE_ACTION_STOP);
-    assert(config.mappings[11].sequence.tokens[0] ==
            wearable_token(WEARABLE_BUTTON_A,
                           WEARABLE_PRIMITIVE_RELEASE));
 }
@@ -179,7 +168,7 @@ static void test_mapping_commands(void)
 
     uint8_t append[4 + 2 * WEARABLE_MAX_SEQUENCE] = {0};
     append[0] = 0x10;
-    append[1] = 12;
+    append[1] = 10;
     append[2] = WEARABLE_ACTION_UNDO;
     append[3] = 1;
 
@@ -187,11 +176,11 @@ static void test_mapping_commands(void)
         wearable_token_from_mask(
             (uint8_t)((1u << WEARABLE_BUTTON_A) |
                       (1u << WEARABLE_BUTTON_MOMENT)),
-            WEARABLE_PRIMITIVE_TRIPLE);
+            WEARABLE_PRIMITIVE_LONG);
     put_u16(&append[4], token);
 
     assert(wearable_apply_config_command(&config, append, sizeof(append)));
-    assert(config.mapping_count == 13u);
+    assert(config.mapping_count == 11u);
     assert(wearable_config_is_valid(&config));
 }
 
@@ -219,7 +208,7 @@ static void test_pairing_cannot_be_removed(void)
     wearable_config_t config;
     wearable_config_set_defaults(&config);
 
-    const uint8_t remove_pairing[] = {0x11, 7};
+    const uint8_t remove_pairing[] = {0x11, 5};
     wearable_config_t before = config;
     assert(!wearable_apply_config_command(&config,
                                           remove_pairing,
@@ -227,8 +216,30 @@ static void test_pairing_cannot_be_removed(void)
     assert(memcmp(&before, &config, sizeof(config)) == 0);
 }
 
+static void test_upgrade(void)
+{
+    wearable_config_t config;
+    wearable_config_set_defaults(&config);
+    config.schema_version = 6;
+    config.mappings[10] = (wearable_mapping_t){
+        .enabled = true, .action = WEARABLE_ACTION_UNDO,
+        .sequence = {1, {wearable_token_from_mask(3, WEARABLE_PRIMITIVE_LONG)}},
+    };
+    config.mappings[11] = (wearable_mapping_t){
+        .enabled = true, .action = WEARABLE_ACTION_POINT_A,
+        .sequence = {1, {wearable_token(WEARABLE_BUTTON_A, WEARABLE_PRIMITIVE_DOUBLE)}},
+    };
+    config.mapping_count = 12;
+    assert(wearable_config_upgrade(&config));
+    assert(wearable_config_is_valid(&config));
+    assert(config.mapping_count == 11);
+    assert(config.mappings[10].sequence.tokens[0] == wearable_token_from_mask(3, WEARABLE_PRIMITIVE_LONG));
+    config.mappings[10].sequence.tokens[0] = wearable_token(WEARABLE_BUTTON_A, WEARABLE_PRIMITIVE_DOUBLE);
+    assert(!wearable_config_is_valid(&config));
+}
 int main(void)
 {
+    test_upgrade();
     test_tokens();
     test_defaults_are_valid();
     test_action_packet();
