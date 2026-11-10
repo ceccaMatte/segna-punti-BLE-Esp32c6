@@ -7,6 +7,7 @@
 #include "wifi_network.h"
 #include "esp_http_server.h"
 #include "sleep_manager.h"
+#include "playmaker_discovery.h"
 
 #define ASSET(name) \
     extern const unsigned char name##_start[] asm("_binary_" #name "_start"); \
@@ -74,7 +75,11 @@ static esp_err_t status_get(httpd_req_t *req)
 
 esp_err_t config_ap_start(void)
 {
-    esp_err_t err = wifi_network_start();
+    const wifi_network_options_t network = {
+        .ap_prefix = "PLAYMAKER_", .ap_ip = "192.168.4.1", .station_enabled = true,
+        .on_activity = sleep_manager_note_button_activity,
+    };
+    esp_err_t err = wifi_network_start(&network);
     if (err != ESP_OK) return err;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.max_uri_handlers = 16;
@@ -100,5 +105,7 @@ esp_err_t config_ap_start(void)
     }
     err = wifi_network_register(server);
     if (err != ESP_OK) return err;
-    return wifi_link_register(server);
+    err = wifi_link_register(server);
+    if (err != ESP_OK) return err;
+    return playmaker_discovery_start();
 }

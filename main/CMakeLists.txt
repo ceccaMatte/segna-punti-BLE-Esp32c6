@@ -15,6 +15,7 @@ idf_component_register(
         "link/wifi_link.c"
         "link/wifi_network.c"
         "web/config_ap.c"
+        "../shared/discovery/playmaker_discovery.c"
     INCLUDE_DIRS
         "."
         "app"
@@ -26,6 +27,7 @@ idf_component_register(
         "power"
         "link"
         "web"
+        "../shared/discovery"
     REQUIRES
         nvs_flash
         esp_driver_gpio
@@ -37,6 +39,7 @@ idf_component_register(
         esp_http_server
         esp_event
         esp_netif
+        espressif__cjson
     EMBED_TXTFILES
         "web/config_ap_page.html"
         "web/config_ap_app.js"

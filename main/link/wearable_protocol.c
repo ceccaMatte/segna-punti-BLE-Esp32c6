@@ -61,6 +61,25 @@ size_t wearable_encode_action(const wearable_action_packet_t *packet,
     return WEARABLE_ACTION_PACKET_SIZE;
 }
 
+bool wearable_decode_action(const uint8_t *in, size_t len, wearable_action_packet_t *out)
+{
+    if (!in || !out || len != WEARABLE_ACTION_PACKET_SIZE || in[0] != WEARABLE_PROTOCOL_VERSION ||
+        in[1] != WEARABLE_MSG_ACTION || in[10] > WEARABLE_ACTION_STOP || in[11] != 0) return false;
+    *out = (wearable_action_packet_t){.session_id=get32(in+2),.sequence=get32(in+6),.action=in[10]};
+    return out->session_id != 0 && out->sequence != 0;
+}
+
+size_t wearable_encode_ack(const wearable_ack_packet_t *p, uint8_t *out, size_t capacity)
+{
+    if (!p || !out || capacity < WEARABLE_ACK_PACKET_SIZE || p->status > WEARABLE_ACK_TEMPORARY_ERROR ||
+        (p->transition_flags & ~WEARABLE_ACK_FLAG_ALL)) return 0;
+    out[0]=WEARABLE_PROTOCOL_VERSION;out[1]=WEARABLE_MSG_ACK;out[2]=p->status;out[3]=p->transition_flags;
+    put32(out+4,p->session_id);put32(out+8,p->sequence);put16(out+12,p->state.revision);
+    out[14]=p->state.points_a;out[15]=p->state.points_b;out[16]=p->state.games_a;out[17]=p->state.games_b;
+    out[18]=p->state.sets_a;out[19]=p->state.sets_b;
+    return WEARABLE_ACK_PACKET_SIZE;
+}
+
 bool wearable_decode_ack(const uint8_t *in,
                          size_t len,
                          wearable_ack_packet_t *out)

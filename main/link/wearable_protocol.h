@@ -68,6 +68,8 @@ size_t wearable_encode_action(const wearable_action_packet_t *packet,
 bool wearable_decode_ack(const uint8_t *in,
                          size_t len,
                          wearable_ack_packet_t *out);
+bool wearable_decode_action(const uint8_t *in, size_t len, wearable_action_packet_t *out);
+size_t wearable_encode_ack(const wearable_ack_packet_t *packet, uint8_t *out, size_t capacity);
 
 size_t wearable_encode_status(bool commissioned,
                               bool authenticated,

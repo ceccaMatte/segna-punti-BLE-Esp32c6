@@ -14,7 +14,6 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
-#include "sleep_manager.h"
 
 typedef struct { char ssid[33]; char password[65]; } credentials_t;
 static const credentials_t FALLBACK = {"Se", "ciao1234"};
@@ -24,8 +23,9 @@ static SemaphoreHandle_t s_radio;
 static EventGroupHandle_t s_events;
 static esp_netif_t *s_sta;
 static portMUX_TYPE s_state_lock = portMUX_INITIALIZER_UNLOCKED;
-static char s_name[24], s_ip[16], s_ssid[33], s_message[120] = "Avvio Wi-Fi";
+static char s_name[24], s_id[13], s_ip[16], s_ssid[33], s_message[120] = "Avvio Wi-Fi";
 static bool s_connected;
+static wifi_network_options_t s_options;
 #define CONNECTED BIT0
 #define DISCONNECTED BIT1
 
@@ -154,11 +154,11 @@ static esp_err_t status_get(httpd_req_t *req)
     char escaped[200], escaped_message[750], json[1200];
     quote(ssid, escaped, sizeof(escaped));
     quote(msg, escaped_message, sizeof(escaped_message));
-    snprintf(json, sizeof(json), "{\"name\":\"%s\",\"connected\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"message\":\"%s\",\"fallback\":\"Se\"}",
-             s_name, connected ? "true" : "false", escaped, ip, escaped_message);
+    snprintf(json, sizeof(json), "{\"name\":\"%s\",\"device_id\":\"%s\",\"connected\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"message\":\"%s\",\"fallback\":\"Se\"}",
+             s_name, s_id, connected ? "true" : "false", escaped, ip, escaped_message);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    sleep_manager_note_button_activity();
+    if (s_options.on_activity) s_options.on_activity();
     return httpd_resp_sendstr(req, json);
 }
 
@@ -201,6 +201,10 @@ static esp_err_t scan_get(httpd_req_t *req)
 
 static esp_err_t network_post(httpd_req_t *req)
 {
+    if (!s_options.station_enabled) {
+        httpd_resp_set_status(req, "409 Conflict");
+        return httpd_resp_sendstr(req, "Seleziona prima la modalita LAN");
+    }
     /* Fixed binary payload: 33-byte NUL-terminated SSID + 65-byte password. */
     credentials_t candidate;
     if (req->content_len != sizeof(candidate)) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Rete non valida");
@@ -224,8 +228,20 @@ static esp_err_t network_post(httpd_req_t *req)
     return httpd_resp_sendstr(req, "Connessione avviata. La rete verra salvata solo dopo il collegamento.");
 }
 
-esp_err_t wifi_network_start(void)
+void wifi_network_status(wifi_network_status_t *out)
 {
+    portENTER_CRITICAL(&s_state_lock);
+    strlcpy(out->name, s_name, sizeof(out->name));
+    strlcpy(out->ip, s_ip, sizeof(out->ip));
+    strlcpy(out->ssid, s_ssid, sizeof(out->ssid));
+    out->connected = s_connected;
+    portEXIT_CRITICAL(&s_state_lock);
+}
+
+esp_err_t wifi_network_start(const wifi_network_options_t *options)
+{
+    if (!options || !options->ap_prefix || !options->ap_ip) return ESP_ERR_INVALID_ARG;
+    s_options = *options;
     s_requests = xQueueCreate(1, sizeof(credentials_t));
     s_radio = xSemaphoreCreateMutex();
     s_events = xEventGroupCreate();
@@ -239,12 +255,22 @@ esp_err_t wifi_network_start(void)
     }
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    if (!esp_netif_create_default_wifi_ap()) return ESP_FAIL;
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
+    if (!ap_netif) return ESP_FAIL;
+    esp_netif_ip_info_t ap_ip = {0};
+    if (esp_netif_str_to_ip4(options->ap_ip, &ap_ip.ip) != ESP_OK) return ESP_ERR_INVALID_ARG;
+    ap_ip.gw = ap_ip.ip;
+    esp_netif_str_to_ip4("255.255.255.0", &ap_ip.netmask);
+    esp_err_t dhcp = esp_netif_dhcps_stop(ap_netif);
+    if (dhcp != ESP_OK && dhcp != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) return dhcp;
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ap_ip));
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
     s_sta = esp_netif_create_default_wifi_sta();
     if (!s_sta) return ESP_FAIL;
     uint8_t mac[6];
     ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_BT));
-    snprintf(s_name, sizeof(s_name), "PLAYMAKER_%02X%02X", mac[4], mac[5]);
+    snprintf(s_id, sizeof(s_id), "%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+    snprintf(s_name, sizeof(s_name), "%s%02X%02X", options->ap_prefix, mac[4], mac[5]);
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
@@ -256,11 +282,12 @@ esp_err_t wifi_network_start(void)
     ap.ap.authmode = WIFI_AUTH_WPA2_PSK;
     ap.ap.max_connection = 4;
     ap.ap.channel = 1;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(options->station_enabled ? WIFI_MODE_APSTA : WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-    ESP_LOGI("wifi_network", "Setup AP %s, URL http://192.168.4.1/", s_name);
+    ESP_LOGI("wifi_network", "Setup AP %s, URL http://%s/", s_name, options->ap_ip);
+    if (!options->station_enabled) { message("Modalita diretta: collega il wearable alla rete del ricevitore"); return ESP_OK; }
     if (xTaskCreate(network_task, "wifi_network", 4096, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
     return ESP_OK;
 }

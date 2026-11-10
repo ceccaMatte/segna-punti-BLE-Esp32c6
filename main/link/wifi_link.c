@@ -2,6 +2,7 @@
 #include "action_retry.h"
 
 #include <string.h>
+#include <stdio.h>
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -116,12 +117,25 @@ static esp_err_t action_get(httpd_req_t *req)
     if (!authorize(req, false)) return ESP_OK;
     uint8_t packet[WEARABLE_ACTION_PACKET_SIZE];
     size_t size = 0;
+    unsigned attempt = 0, remaining_ms = 0;
+    char attempts[4], remaining[12];
     xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_count && action_retry_ready(&s_queue[s_head].retry, esp_timer_get_time())) {
         size = wearable_encode_action(&s_queue[s_head].packet, packet, sizeof(packet));
-        if (size) action_retry_sent(&s_queue[s_head].retry, esp_timer_get_time());
+        if (size) {
+            action_retry_sent(&s_queue[s_head].retry, esp_timer_get_time());
+            attempt = s_queue[s_head].retry.attempts;
+            int64_t remaining = s_queue[s_head].retry.deadline_us - esp_timer_get_time();
+            remaining_ms = remaining > 0 ? (unsigned)(remaining / 1000) : 0;
+        }
     }
     xSemaphoreGive(s_lock);
+    if (size) {
+        snprintf(attempts, sizeof(attempts), "%u", attempt);
+        snprintf(remaining, sizeof(remaining), "%u", remaining_ms);
+        httpd_resp_set_hdr(req, "X-Playmaker-Attempt", attempts);
+        httpd_resp_set_hdr(req, "X-Playmaker-Remaining-Ms", remaining);
+    }
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_type(req, "application/octet-stream");
     if (!size) httpd_resp_set_status(req, "204 No Content");

@@ -16,6 +16,12 @@ risparmio energetico. Bluetooth è disabilitato nel firmware di questo branch.
 
 Vedi [procedura completa, API e limiti](docs/wifi.md).
 
+Per la seconda ESP usata come ricevitore USB su Ubuntu Server, vedi il
+[contratto API USB v1 e modalità diretta/LAN](docs/receiver-usb-api.md).
+Il firmware è nel [progetto separato receiver/](receiver/README.md), che riusa
+protocollo e rete del wearable. Per usarlo vanno programmati il ricevitore e il
+wearable aggiornato con discovery; il programma Ubuntu è a cura del socio.
+
 ## Build e test
 
 ```sh
